@@ -1,8 +1,8 @@
 #
 #
-#      0=================================0
-#      |    Kernel Point Convolutions    |
-#      0=================================0
+#      0==============================0
+#      |    Deep Collision Checker    |
+#      0==============================0
 #
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -57,6 +57,38 @@ import re
 from utils.mayavi_visu import show_point_cloud
 
 
+def filter_frame_timestamps(map_t, f_names):
+
+    # Verify which frames we need:
+    frame_names = []
+    f_name_i = 0
+    last_t = map_t[0] - 0.1
+    remove_inds = []
+    for i, t in enumerate(map_t):
+
+        # Handle cases were we have two identical timestamps in map_t
+        if np.abs(t - last_t) < 0.01:
+            remove_inds.append(i)
+            continue
+        last_t = t
+
+        f_name = '{:.6f}.ply'.format(t)
+        while f_name_i < len(f_names) and not (
+                f_names[f_name_i].endswith(f_name)):
+            #print(f_names[f_name_i], ' skipped for ', f_name)
+            f_name_i += 1
+
+        if f_name_i >= len(f_names):
+            break
+
+        frame_names.append(f_names[f_name_i])
+        f_name_i += 1
+
+    # Remove the double inds form map_t and map_H
+    map_t = np.delete(map_t, remove_inds, axis=0)
+
+    return map_t, frame_names
+
 
 def compute_plane(points):
     ref_point = points[0]
@@ -102,11 +134,67 @@ def RANSAC(points, NB_RANDOM_DRAWS=100, threshold_in=0.1):
     return best_ref_pt, best_normal, best_mask
 
 
+def extract_flat_ground(points,
+                        dist_thresh=0.15,
+                        remove_dist=0.15):
+
+    # Get the ground plane with RANSAC
+    plane_P = points[0] * 0
+    plane_N = points[0] * 0
+    plane_N[-1] = 1.0
+
+    # Get mask on all the points
+    plane_mask = in_plane(points, plane_P, plane_N, dist_thresh)
+
+    # Get better ground/objects boundary
+    candidates = points[plane_mask]
+    others = points[np.logical_not(plane_mask)]
+    dists, inds = KDTree(others).query(candidates, 1)
+    plane_mask[plane_mask] = np.squeeze(dists) > remove_dist
+
+    return plane_mask
+
+
 def extract_ground(points, normals, out_folder,
                    vertical_thresh=10.0,
                    dist_thresh=0.15,
                    remove_dist=0.15,
                    saving=True):
+                   
+    # Get points with vertical normal
+    vertical_angle = np.arccos(np.abs(np.clip(normals[:, 2], -1.0, 1.0)))
+
+    # Use the thresold on the vertical angle in degree
+    plane_mask = vertical_angle < vertical_thresh * np.pi / 180
+
+    # Get the ground plane with RANSAC
+    plane_P, plane_N, _ = RANSAC(points[plane_mask], threshold_in=dist_thresh)
+
+    # Get mask on all the points
+    plane_mask = in_plane(points, plane_P, plane_N, dist_thresh)
+    mask0 = np.copy(plane_mask)
+
+    # Get better ground/objects boundary
+    candidates = points[plane_mask]
+    others = points[np.logical_not(plane_mask)]
+    dists, inds = KDTree(others).query(candidates, 1)
+    plane_mask[plane_mask] = np.squeeze(dists) > remove_dist
+
+    if saving:
+        ground_points = points[plane_mask]
+        ground_normals = normals[plane_mask]
+        write_ply(join(out_folder, 'ground.ply'),
+                  [ground_points, ground_normals],
+                  ['x', 'y', 'z', 'nx', 'ny', 'nz'])
+
+    return plane_mask
+
+def extract_ground_old(points, normals, out_folder,
+                   vertical_thresh=10.0,
+                   dist_thresh=0.15,
+                   remove_dist=0.15,
+                   saving=True):
+                   
     # Get points with vertical normal
     vertical_angle = np.arccos(np.abs(np.clip(normals[:, 2], -1.0, 1.0)))
 
@@ -431,10 +519,10 @@ def interp_pose(t, H0, H1):
     return interp_H
 
 
-def frame_H_to_points(H_f, size=1.0):
+def frame_H_to_points(H_f, size=1.0, num_p=5):
 
     # Create artificial frames
-    x = np.linspace(0, size, 50, dtype=np.float32)
+    x = np.linspace(0, size, num_p, dtype=np.float32)
     points = np.hstack((np.vstack((x, x * 0, x * 0)), np.vstack((x * 0, x, x * 0)), np.vstack((x * 0, x * 0, x)))).T
     colors = ((points > 0.1 * size).astype(np.float32) * 255).astype(np.uint8)
     hpoints = np.hstack((points, np.ones_like(points[:, :1])))

@@ -1,8 +1,8 @@
 #
 #
-#      0=================================0
-#      |    Kernel Point Convolutions    |
-#      0=================================0
+#      0==============================0
+#      |    Deep Collision Checker    |
+#      0==============================0
 #
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -184,8 +184,6 @@ class ModelTrainer:
 
         # Loop variables
         t0 = time.time()
-        t = [time.time()]
-        last_display = time.time()
         mean_dt = np.zeros(1)
 
         # Start training loop
@@ -196,6 +194,8 @@ class ModelTrainer:
                 remove(PID_file)
 
             self.step = 0
+            t = [time.time()]
+            last_display = time.time()
             for batch in training_loader:
 
                 # Check kill signal (running_PID.txt deleted)
@@ -1490,10 +1490,11 @@ class ModelTrainer:
                 
 
                 # Get the 2D predictions and gt (init_2D)
+                i_frame0 = config.n_frames - 1
                 img0 = stck_init_preds[b_i, 0, :, :, :]
-                gt_im0 = np.copy(stck_future_gts[b_i, config.n_frames - 1, :, :, :])
-                gt_im1 = stck_future_gts[b_i, config.n_frames - 1, :, :, :]
-                gt_im1[:, :, 2] = np.max(stck_future_gts[b_i, :, :, :, 2], axis=0)
+                gt_im0 = np.copy(stck_future_gts[b_i, i_frame0, :, :, :])
+                gt_im1 = stck_future_gts[b_i, i_frame0, :, :, :]
+                gt_im1[:, :, 2] = np.max(stck_future_gts[b_i, i_frame0:, :, :, 2], axis=0)
                 img1 = stck_init_preds[b_i, 1, :, :, :]
 
                 

@@ -1,8 +1,8 @@
 #
 #
-#      0=================================0
-#      |    Kernel Point Convolutions    |
-#      0=================================0
+#      0==============================0
+#      |    Deep Collision Checker    |
+#      0==============================0
 #
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1169,6 +1169,11 @@ class KPCollider(nn.Module):
         self.initial_net = Initial2DBlock(out_dim, config.first_features_dim, levels=config.init_2D_levels, resnet_per_level=config.init_2D_resnets)
         self.init_softmax_2D = nn.Conv2d(config.first_features_dim, 3, kernel_size=1, bias=True)
         self.merge_softmax_2D = nn.Conv2d(config.first_features_dim, 3, kernel_size=1, bias=True)
+        
+        self.skipcut_2D = config.shared_2D
+        head_softmax_in_D = config.first_features_dim
+        if self.skipcut_2D:
+            head_softmax_in_D *= 2
 
         self.shared_2D = config.shared_2D
         if self.shared_2D:
@@ -1176,14 +1181,14 @@ class KPCollider(nn.Module):
             self.prop_net = Propagation2DBlock(config.first_features_dim, config.first_features_dim, n_blocks=config.prop_2D_resnets)
 
             # Shared head softmax
-            self.head_softmax_2D = nn.Conv2d(config.first_features_dim, 3, kernel_size=1, bias=True)
+            self.head_softmax_2D = nn.Conv2d(head_softmax_in_D, 3, kernel_size=1, bias=True)
 
         else:
             self.prop_net = nn.ModuleList()
             self.head_softmax_2D = nn.ModuleList()
             for i in range(config.n_2D_layers):
                 self.prop_net.append(Propagation2DBlock(config.first_features_dim, config.first_features_dim, n_blocks=config.prop_2D_resnets))
-                self.head_softmax_2D.append(nn.Conv2d(config.first_features_dim, 3, kernel_size=1, bias=True))
+                self.head_softmax_2D.append(nn.Conv2d(head_softmax_in_D, 3, kernel_size=1, bias=True))
 
 
         ################
@@ -1233,8 +1238,17 @@ class KPCollider(nn.Module):
         self.train_only_3D = config.pretrained_3D == 'todo'
 
         # Loss coefficient for each timestamp and each class [T_2D, 3]
-        self.future_coeffs = torch.nn.Parameter(torch.ones((config.n_2D_layers, 3)), requires_grad=False)
-        self.total_coeff = float(torch.sum(self.future_coeffs))
+        layer_factors = np.linspace(1.0, config.factor_2D_prop_loss, config.n_2D_layers)
+        if len(config.power_2D_class_loss) == 3:
+            class_factors = np.array(config.power_2D_class_loss, dtype=np.float32)
+        else:
+            class_factors = np.ones((3,), dtype=np.float32)
+
+        np_coeffs = np.expand_dims(class_factors, 0) * np.expand_dims(layer_factors, 1)
+        np_coeffs = np_coeffs / np.sum(np_coeffs)
+
+        self.future_coeffs = torch.nn.Parameter(torch.from_numpy(np_coeffs), requires_grad=False)
+        # self.total_coeff = float(torch.sum(self.future_coeffs))
 
         return
 
@@ -1329,14 +1343,21 @@ class KPCollider(nn.Module):
 
             # Propagated preds
             preds_2D = []
+            x_2D_0 = x_2D.clone()
             if self.shared_2D:
                 for i in range(config.n_2D_layers):
                     x_2D = self.prop_net(x_2D)
-                    preds_2D.append(self.head_softmax_2D(x_2D))
+                    if self.skipcut_2D:
+                        preds_2D.append(self.head_softmax_2D(torch.cat([x_2D, x_2D_0], dim=1)))
+                    else:
+                        preds_2D.append(self.head_softmax_2D(x_2D))
             else:
                 for i in range(config.n_2D_layers):
                     x_2D = self.prop_net[i](x_2D)
-                    preds_2D.append(self.head_softmax_2D[i](x_2D))
+                    if self.skipcut_2D:
+                        preds_2D.append(self.head_softmax_2D[i](torch.cat([x_2D, x_2D_0], dim=1)))
+                    else:
+                        preds_2D.append(self.head_softmax_2D[i](x_2D))
 
             # Stack 2d outputs and permute dimension to get the shape: [B, T, L_2D, L_2D, 3]
             preds_2D = torch.stack(preds_2D, axis=2).permute(0, 2, 3, 4, 1)
@@ -1400,12 +1421,15 @@ class KPCollider(nn.Module):
             # Binary cross entropy loss for multilable classification (because the labels are not mutually exclusive)
             # Only apply loss to part of the empyty space to reduce unbalanced classes
 
+            # Indice of the initial frame (latest of the input frames)
+            i0 = self.n_frames - 1
+
             # Init loss for initial class probablitities => shapes = [B, 1, L_2D, L_2D, 3]
-            self.init_2D_loss = self.power_2D_init_loss * self.criterion_2D(preds_init_2D[:, 0, :, :, :], batch.future_2D[:, self.n_frames - 1, :, :, :])
+            self.init_2D_loss = self.power_2D_init_loss * self.criterion_2D(preds_init_2D[:, 0, :, :, :], batch.future_2D[:, i0, :, :, :])
 
             # Init loss for merged future class probablitities => shapes = [B, 1, L_2D, L_2D, 3]
-            merged_future = batch.future_2D[:, self.n_frames - 1, :, :, :].detach().clone()
-            max_v, _ = torch.max(batch.future_2D[:, :, :, :, 2], dim=1)
+            merged_future = batch.future_2D[:, i0, :, :, :].detach().clone()
+            max_v, _ = torch.max(batch.future_2D[:, i0:, :, :, 2], dim=1)
             merged_future[:, :, :, 2] = max_v
             self.init_2D_loss += self.power_2D_init_loss * self.criterion_2D(preds_init_2D[:, 1, :, :, :], merged_future)
             
@@ -1550,7 +1574,7 @@ class KPCollider(nn.Module):
                 future_errors = future_errors / (future_sums + 1e-9)
             
             # Here multiply with coefficients
-            future_loss = torch.sum(future_errors * self.future_coeffs) / self.total_coeff
+            future_loss = torch.sum(future_errors * self.future_coeffs)
 
             # Save prop loss
             self.prop_2D_loss = self.power_2D_prop_loss * future_loss

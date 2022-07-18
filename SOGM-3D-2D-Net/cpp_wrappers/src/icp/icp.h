@@ -6,11 +6,12 @@
 #include <random>
 #include <unordered_set>
 #include <numeric>
+#include <chrono>
 
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-#include <../Eigen/Eigenvalues>
+#include <Eigen/Eigenvalues>
 #include "../cloud/cloud.h"
 
 # include "../pointmap/pointmap.h"
@@ -52,6 +53,13 @@ public:
 
 	// Initial transformation
 	Eigen::Matrix4d init_transform;
+	Eigen::Matrix4d last_transform0;
+	Eigen::Matrix4d last_transform1;
+	float last_time;
+
+	// Variables related to flat ground
+	double ground_z;
+	double ground_w;
 
 	// Methods
 	// *******
@@ -69,6 +77,11 @@ public:
 		init_phi = 0.0;
 		motion_distortion = false;
 		init_transform = Eigen::Matrix4d::Identity(4, 4);
+		last_transform0 = Eigen::Matrix4d::Identity(4, 4);
+		last_transform1 = Eigen::Matrix4d::Identity(4, 4);
+		last_time = 0;
+		ground_z = 0;
+		ground_w = -1;
 	}
 };
 
@@ -132,9 +145,6 @@ public:
 // Function declaration
 // ********************
 
-
-Eigen::Matrix4d pose_interp(float t, Eigen::Matrix4d const& H1, Eigen::Matrix4d const& H2, int verbose);
-
 void SolvePoint2PlaneLinearSystem(const Matrix6d& A, const Vector6d& b, Vector6d& x);
 
 void PointToPlaneErrorMinimizer(vector<PointXYZ>& targets,
@@ -142,7 +152,9 @@ void PointToPlaneErrorMinimizer(vector<PointXYZ>& targets,
 	vector<PointXYZ>& refNormals,
 	vector<float>& weights,
 	vector<pair<size_t, size_t>>& sample_inds,
-	Eigen::Matrix4d&  mOut);
+	Eigen::Matrix4d&  mOut,
+	vector<bool> &is_ground,
+	double ground_z=0);
 
 void PointToMapICPDebug(vector<PointXYZ>& tgt_pts,
 	vector<float>& tgt_w,
@@ -151,9 +163,20 @@ void PointToMapICPDebug(vector<PointXYZ>& tgt_pts,
 	vector<float>& map_scores,
 	ICP_params& params,
 	ICP_results& results);
+	
+void RandomPointAssociation(vector<size_t> &w_inds,
+							PointMap &map,
+							vector<PointXYZ> &aligned,
+							vector<pair<size_t, size_t>> &sample_inds,
+							default_random_engine &generator,
+							discrete_distribution<int> &distribution,
+							nanoflann::SearchParams &search_params,
+							float &max_planar_d,
+							ICP_params &params,
+							ICP_results &results);
 
-void PointToMapICP(vector<PointXYZ>& tgt_pts,
-	vector<float>& tgt_w,
+void PointToMapICP(vector<PointXYZ>& tgt_pts, vector<float>& tgt_t,
+	vector<double>& tgt_w,
 	PointMap& map,
 	ICP_params& params,
 	ICP_results& results);

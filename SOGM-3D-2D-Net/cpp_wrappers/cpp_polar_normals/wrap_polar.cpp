@@ -1,6 +1,6 @@
 #include <Python.h>
 #include <numpy/arrayobject.h>
-#include "../src/polar_processing/polar_processing.h"
+#include "../src/pointmap/pointmap.h"
 #include <string>
 
 
@@ -70,7 +70,7 @@ static PyObject* polar_normals(PyObject* self, PyObject* args, PyObject* keywds)
 	PyObject* queries_obj = NULL;
 
 	// Keywords containers
-	static char* kwlist[] = { "points", "radius", "lidar_n_lines", "h_scale", "r_scale", "verbose", NULL };
+	static char* kwlist[] = { (char*)"points", (char*)"radius", (char*)"lidar_n_lines", (char*)"h_scale", (char*)"r_scale", (char*)"verbose", NULL };
 	float radius = 1.5;
 	int lidar_n_lines = 32;
 	float h_scale = 0.5f;
@@ -168,25 +168,30 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 	float theta_dl = 0.1;
 	float phi_dl = 1.0;
 	float verbose_time = -1.0;
-	bool motion_distortion = false;
+	int n_slices = 1;
+	int lidar_n_lines = 32;
 	char* fnames_str;
 	PyObject* map_p_obj = NULL;
 	PyObject* map_n_obj = NULL;
 	PyObject* H_obj = NULL;
 
 	// Keywords containers
-	static char* kwlist[] = { "frame_names", "map_points",  "map_normals", "H_frames", "map_dl", "theta_dl", "phi_dl", "verbose_time", NULL };
+	static char* kwlist[] = {(char *)"frame_names", (char *)"map_points", (char *)"map_normals", (char *)"H_frames",
+							 (char *)"map_dl", (char *)"theta_dl", (char *)"phi_dl",
+							 (char *)"verbose_time", (char *)"n_slices", (char *)"lidar_n_lines", NULL};
 
-	// Parse the input  
-	if (!PyArg_ParseTupleAndKeywords(args, keywds, "zOOO|$ffff", kwlist, 
-		&fnames_str,
-		&map_p_obj, 
-		&map_n_obj, 
-		&H_obj, 
-		&map_dl, 
-		&theta_dl, 
-		&phi_dl, 
-		&verbose_time))
+	// Parse the input
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "zOOO|$ffffll", kwlist,
+									 &fnames_str,
+									 &map_p_obj,
+									 &map_n_obj,
+									 &H_obj,
+									 &map_dl,
+									 &theta_dl,
+									 &phi_dl,
+									 &verbose_time,
+									 &n_slices,
+									 &lidar_n_lines))
 	{
 		PyErr_SetString(PyExc_RuntimeError, "Error parsing arguments");
 		return NULL;
@@ -269,57 +274,77 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 
 	// Init point map
 	// **************
+
+	cout << "Creating point map" << endl;
+
+	vector<float> map_scores(map_points.size(), 1.0);
+	PointMap tmp_map(map_dl);
+	tmp_map.cloud.pts = map_points;
+	tmp_map.normals = map_normals;
+	tmp_map.samples.reserve(map_points.size());
 	
 	// Create the pointmap voxels
-	unordered_map<VoxKey, size_t> map_samples;
-	map_samples.reserve(map_points.size());
 	float inv_map_dl = 1.0 / map_dl;
 	VoxKey k0;
 	size_t p_i = 0;
-
+	bool wrong_pointmap = false;
 	for (auto &p : map_points)
 	{
-
-		//cout << p << endl;
-
 		// Corresponding key
 		k0.x = (int)floor(p.x * inv_map_dl);
 		k0.y = (int)floor(p.y * inv_map_dl);
 		k0.z = (int)floor(p.z * inv_map_dl);
 
-		//cout << k0.x << ", " << k0.y << ", " << k0.z << endl;
-
 		// Update the sample map
-		if (map_samples.count(k0) < 1)
-		{
-			map_samples.emplace(k0, p_i);
-		}
-		else
-		{
-			int a;
-			//cout << "WARNING: multiple points in a single map voxel" << endl;
-			//return NULL;
-		}
+		if (tmp_map.samples.count(k0) < 1)
+			tmp_map.samples.emplace(k0, p_i);
+		// else
+		// {
+		// 	cout << "[" << k0.x << ", " << k0.y << ", " << k0.z << "] /";
+		// 	cout << " old index = " << tmp_map.samples[k0];
+		// 	cout << " / new index = " << p_i << endl;
+		// 	wrong_pointmap = true;
+		// }
 			
 		p_i++;
 	}
-	//cout << "++++++++++++++++++++++++++++++++++++++" << endl;
+
+	if (wrong_pointmap)
+	{
+		Py_XDECREF(map_p_array);
+		Py_XDECREF(map_n_array);
+		Py_XDECREF(H_array);
+		cout << "ERROR: multiple points in a single map voxel" << endl;
+		return NULL;
+	}
+
+	cout << "OK" << endl;
+
+	// Start movable detection
+	// ***********************
 
 	// Init map movable probabilities and counts
 	vector<float> movable_probs(map_points.size(), 0);
 	vector<int> movable_counts(map_points.size(), 0);
 
+	// Parameters
+	string time_name = "time";
+	string ring_name = "ring";
+	// float last_t_max;
+	bool motion_distortion = n_slices > 1;
+	vector<float> ring_angles;
+	vector<float> ring_mids;
+	vector<float> ring_d_thetas;
 
-	// Start movable detection
-	// ***********************
-
-	// Loop on the lines of "frame_names" string
-	istringstream iss(frame_names);
-	size_t frame_i = 0;
+	// Timing
 	clock_t t0 = std::clock();
 	clock_t last_disp_t1 = std::clock();
 	float fps = 0.0;
 	float fps_regu = 0.9;
+
+	// Loop on the lines of "frame_names" string
+	istringstream iss(frame_names);
+	size_t frame_i = 0;
 	for (string line; getline(iss, line);)
 	{
 
@@ -328,31 +353,78 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 
 		// Load ply file
 		vector<PointXYZ> f_pts;
-		load_cloud(line, f_pts);
+		vector<float> f_ts;
+		vector<int> rings;
+		load_cloud(line, f_pts, f_ts, time_name, rings, ring_name);
 
-		// Get the corresponding pose
-		Eigen::Matrix3d R = all_H.block(frame_i * 4, 0, 3, 3);
-		Eigen::Vector3d T = all_H.block(frame_i * 4, 3, 3, 1);
+		// Get lidar angles for varaible frustum size
+		if (ring_mids.size() < 1)
+		{
+			// Get polar coordinates
+			vector<PointXYZ> polar_pts(f_pts);
+			cart2pol_(polar_pts);
 
-		// Handle motion distortion by slices
+			// Get angle of each lidar ring
+			get_lidar_angles(polar_pts, ring_angles, lidar_n_lines);
+
+			// Get middles
+			for (int i = 0; i < (int)ring_angles.size() - 1; i++)
+				ring_mids.push_back((ring_angles[i+1] + ring_angles[i]) / 2);
+
+			// Get diffs (max)
+			int j = 0;
+			ring_d_thetas.push_back(ring_angles[j+1] - ring_angles[j]);
+			j++;
+			while (j < (int)ring_angles.size() - 1)
+			{
+				float tmp = max(ring_angles[j+1] - ring_angles[j], ring_angles[j] - ring_angles[j-1]);
+				ring_d_thetas.push_back(tmp);
+				j++;
+			}
+			ring_d_thetas.push_back(ring_angles[j] - ring_angles[j-1]);
+
+		}
+
+		// Get frame min and max times
+		float t_min, t_max;
+		float loop_ratio = 0.01;
+		get_min_max_times(f_ts, t_min, t_max, loop_ratio);
+		
+		// // Init last_time
+		// if (frame_i < 1)
+		// 	last_t_max = t_min;
+			
+		// Get the motion_distorTion values from timestamps
+		// 0 for the t_min and 1 for t_max
+		vector<float> f_alphas;
 		if (motion_distortion)
 		{
-			for (int s = 0; s < 12; s++)
+			float inv_factor;
+			if (abs(t_max - t_min) > 1e-6)
+				inv_factor = 1 / (t_max - t_min);
+			else
 			{
-				Eigen::Matrix3d slice_R;
-				Eigen::Vector3d slice_T;
-				vector<PointXYZ> slice_pts;
-
-				// DO STUFF
+				cout << t_min << " - " << t_max << endl;
+				inv_factor = 1;
 			}
+			f_alphas.reserve(f_ts.size());
+			for (int j = 0; j < (int)f_ts.size(); j++)
+				f_alphas.push_back((f_ts[j] - t_min) * inv_factor);
 		}
+
+		// Get the pose of the beginning and the end of the frame
+		Eigen::Matrix4d H1 = all_H.block(frame_i * 4, 0, 4, 4);
+		Eigen::Matrix4d H0;
+
+		if (motion_distortion && frame_i > 0)
+			H0 = all_H.block((frame_i - 1) * 4, 0, 4, 4);
 		else
-		{
-			// Compute results
-			compare_map_to_frame(f_pts, map_points, map_normals, map_samples, R, T, theta_dl, phi_dl, map_dl, movable_probs, movable_counts);
+			H0 = H1;
 
+		// Compute movable points
+		tmp_map.update_movable_pts(f_pts, f_alphas, H0, H1, theta_dl, phi_dl, n_slices, ring_angles, ring_mids, ring_d_thetas, movable_probs, movable_counts);
+		// cout << "done" << endl;
 
-		}
 		frame_i++;
 
 		// Timing
@@ -367,11 +439,14 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 			int remaining_min = (int)floor(remaining_sec / 60.0);
 			remaining_sec = remaining_sec - remaining_min * 60.0;
 			char buffer[100];
-			sprintf(buffer, "Annot %5d/%d at %5.1f fps - %d min %.0f sec remaining", (int)frame_i, N_frames, fps, remaining_min, remaining_sec);
+			sprintf(buffer, "Annot %5d/%d at %5.1f fps - %d min %.0f sec remaining", (int)frame_i, (int)N_frames, fps, remaining_min, remaining_sec);
 			cout << string(buffer) << endl;
 			last_disp_t1 = t1;
 		}
 		t0 = t1;
+
+		// if (frame_i > 10)
+		// 	break;
 	}
 
 	// Manage outputs

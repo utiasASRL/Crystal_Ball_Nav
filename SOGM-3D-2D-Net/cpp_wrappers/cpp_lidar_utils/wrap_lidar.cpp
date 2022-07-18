@@ -13,7 +13,7 @@ static char module_docstring[] = "This module provides lidar related functions";
 
 static char get_visibility_docstring[] = "Gets the visibility mask as 1D ranges or 2D costmap from a lidar pointcloud";
 
-static char other_utils_docstring[] = "TODO";
+static char other_utils_docstring[] = "OTHER";
 
 
 // Declare the functions
@@ -76,9 +76,10 @@ static PyObject* get_visibility(PyObject* self, PyObject* args, PyObject* keywds
 	float dl_2D = -1.0;
 
 	// Keywords containers
-	static char* kwlist[] = { "points", "center", "ground", "n_angles", "z_min", "z_max", "dl_2D", NULL };
+	static char *kwlist[] = {(char *)"points", (char *)"center", (char *)"ground", (char *)"n_angles",
+							 (char *)"z_min", (char *)"z_max", (char *)"dl_2D", NULL};
 
-	// Parse the input  
+	// Parse the input
 	if (!PyArg_ParseTupleAndKeywords(args, keywds, "OOO|$ifff", kwlist, &points_obj, &center_obj, &ground_obj, &n_angles, &zMin, &zMax, &dl_2D))
 	{
 		PyErr_SetString(PyExc_RuntimeError, "Error parsing arguments");
@@ -145,6 +146,7 @@ static PyObject* get_visibility(PyObject* self, PyObject* args, PyObject* keywds
 	vector<float> plane_values;
 	plane_values = vector<float>((float*)PyArray_DATA(ground_array), (float*)PyArray_DATA(ground_array) + 4);
 	Plane3D ground(plane_values[0], plane_values[1], plane_values[2], plane_values[3]);
+
 
 
 	if (dl_2D < 0)
@@ -220,13 +222,10 @@ static PyObject* get_visibility(PyObject* self, PyObject* args, PyObject* keywds
 		Py_XDECREF(ground_array);
 
 		return ret;
-
-
 	}
 }
 
-
-static PyObject* other_utils(PyObject* self, PyObject* args, PyObject* keywds)
+static PyObject *other_utils(PyObject *self, PyObject *args, PyObject *keywds)
 {
 
 	// Manage inputs
@@ -236,11 +235,11 @@ static PyObject* other_utils(PyObject* self, PyObject* args, PyObject* keywds)
 	float tmp = 0.1;
 
 	// Keywords containers
-	static char* kwlist[] = { "tmp", NULL };
+	static char* kwlist[] = {(char*)"tmp", NULL};
 
-	// Parse the input  
-	if (!PyArg_ParseTupleAndKeywords(args, keywds, "f", kwlist, 
-		&tmp))
+	// Parse the input
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "f", kwlist,
+									 &tmp))
 	{
 		PyErr_SetString(PyExc_RuntimeError, "Error parsing arguments");
 		return NULL;

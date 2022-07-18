@@ -6,11 +6,17 @@
 #include <random>
 #include <unordered_set>
 #include <numeric>
+#include <fstream>
+#include <filesystem>
+
 
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-#include <../Eigen/Eigenvalues>
+#include "ceres/ceres.h"
+#include "glog/logging.h"
+
+#include <Eigen/Eigenvalues>
 #include "../cloud/cloud.h"
 #include "../nanoflann/nanoflann.hpp"
 
@@ -18,6 +24,7 @@
 #include "../polar_processing/polar_processing.h"
 #include "../pointmap/pointmap.h"
 #include "../icp/icp.h"
+
 
 using namespace std;
 
@@ -44,11 +51,26 @@ public:
 	// Size of the voxels for frame subsampling
 	float frame_voxel_size;
 
+	// max distance travelled before frames are removed from local map
+	float local_map_dist;
+
 	// Account for motion distortion (fasle in the case of simulated data)
 	bool motion_distortion;
 
 	// Are we filtering frames
 	bool filtering;
+
+	// Should we save subsampled and aligned frames for loop closure
+	bool saving_for_loop_closure;
+
+	// Should we force flat ground
+	bool force_flat_ground;
+
+	// Are we using a barycenter pointmap (first-in pointmap otherwise)
+	bool barycenter_map;
+
+	// Are we updating the given initial map
+	bool update_init_map;
 
 	// Verbose option (time in sec between each verbose negative for no verbose)
 	float verbose_time;
@@ -64,6 +86,8 @@ public:
 	float r_scale;
 	int outl_rjct_passes;
 	float outl_rjct_thresh;
+	vector<float> polar_r2s;
+	float min_theta_radius;
 
 	// Methods
 	// *******
@@ -72,15 +96,21 @@ public:
 	SLAM_params()
 	{
 		lidar_n_lines = 32;
+		min_theta_radius = 0.025;
 		map_voxel_size = 0.08;
 		frame_voxel_size = 0.2;
+		local_map_dist = 10.0;
 		motion_distortion = false;
 		filtering = false;
+		saving_for_loop_closure = false;
+		force_flat_ground = false;
+		barycenter_map = false;
+		update_init_map = true;
 		verbose_time = -1;
 		H_velo_base = Eigen::Matrix4d::Identity(4, 4);
 
-		h_scale = 0.5;
-		r_scale = 4.0;
+		h_scale = 0.3;
+		r_scale = 10.0;
 		outl_rjct_passes = 2;
 		outl_rjct_thresh = 0.003;
 	}
@@ -97,12 +127,24 @@ public:
 
 	// Map used by the algorithm
 	PointMap map;
+	PointMap map0;
 
 	// Pose of the last mapped frame
 	Eigen::Matrix4d last_H;
 
 	// Current pose correction from odometry to map
 	Eigen::Matrix4d H_OdomToMap;
+
+	// Indice of frame
+	int frame_i;
+
+	// Count errors to stop if this is not going well
+	int warning_count;
+
+	// Container for the motion corrected frame used to update the map
+	vector<PointXYZ> corrected_frame;
+	vector<double> corrected_scores;
+	float t_min, t_max;
 
 	// Methods
 	// *******
@@ -113,26 +155,78 @@ public:
 		// Init paramters
 		params = slam_params0;
 
-		//// Init map from previous session
+		// Init map from previous session
 		map.dl = params.map_voxel_size;
+		map0.dl = params.map_voxel_size;
 		if (init_points.size() > 0)
 		{
-			map.update_idx = -1;
-			map.update(init_points, init_normals, init_scores);
+			map0.update_idx = -1;
+			map0.update(init_points, init_normals, init_scores, -1);
 		}
+
+		if (params.barycenter_map)
+		{
+			// We do not initialize the map to get a fresh new one
+			map.set_barycenter();
+		}
+		else
+		{
+			// Init map from previous session
+			if (init_points.size() > 0)
+			{
+				map.update_idx = -1;
+				map.update(init_points, init_normals, init_scores, -1);
+			}
+		}
+
 
 		// Dummy first last_H
 		last_H = Eigen::Matrix4d::Identity(4, 4);
 		H_OdomToMap = Eigen::Matrix4d::Identity(4, 4);
+		frame_i = 0;
+		warning_count = 0;
 	}
 
 	// Mapping functions
 	void init_map() { return; }
-	void add_new_frame(vector<PointXYZ> &f_pts, Eigen::Matrix4d &H_OdomToScanner, int verbose = 0);
+	void add_new_frame(vector<PointXYZ> &f_pts,
+					   vector<float> &f_ts,
+					   vector<int> &f_rings,
+					   Eigen::Matrix4d &H_OdomToScanner,
+					   string save_path,
+					   int verbose = 0);
 };
 
 // Function declaration
 // ********************
+
+void complete_map(string &frame_names,
+				  vector<double> &frame_times,
+				  Eigen::MatrixXd &slam_H,
+				  vector<float> &slam_times,
+				  PointMap& map,
+				  vector<int> &loc_labels,
+				  std::string &save_path,
+				  std::string &time_name,
+				  std::string &ring_name,
+				  size_t start_ind,
+				  size_t last_ind,
+				  SLAM_params &params);
+
+void preprocess_frame(vector<PointXYZ> &f_pts,
+					  vector<float> &f_ts,
+					  vector<int> &f_rings,
+					  vector<PointXYZ> &sub_pts,
+					  vector<PointXYZ> &normals,
+					  vector<float> &norm_scores,
+					  vector<double> &icp_scores,
+					  vector<size_t> &sub_inds,
+					  Plane3D &frame_ground,
+					  vector<float> &heights,
+					  SLAM_params &params,
+					  vector<clock_t> &t);
+
+void ceres_hello();
 
 Eigen::MatrixXd call_on_sim_sequence(string &frame_names,
 									 vector<double> &frame_times,
@@ -144,3 +238,13 @@ Eigen::MatrixXd call_on_sim_sequence(string &frame_names,
 									 vector<float> &init_scores,
 									 SLAM_params &slam_params,
 									 string save_path);
+
+Eigen::MatrixXd call_on_real_sequence(string &frame_names,
+									  vector<double> &frame_times,
+									  Eigen::MatrixXd &odom_H,
+									  vector<PointXYZ> &init_pts,
+									  vector<PointXYZ> &init_normals,
+									  vector<float> &init_scores,
+									  SLAM_params &slam_params,
+									  string save_path);
+

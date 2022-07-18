@@ -133,6 +133,34 @@ RUN pip3 install autopep8 flake8
 # RUN export ETS_TOOLKIT=pyqt5
 # RUN echo "export ETS_TOOLKIT=pyqt5" >> ~/.bashrc
 
+# Install dependencies for g2o
+RUN apt-get install -y --no-install-recommends \
+    libsuitesparse-dev \
+    qtdeclarative5-dev \
+    qt5-qmake \
+    libqglviewer-dev-qt5 \
+    libeigen3-dev \
+    libgoogle-glog-dev \
+    libgflags-dev \
+    libatlas-base-dev 
+
+# Install ceres
+WORKDIR /workspace/compiled_libs
+RUN wget http://ceres-solver.org/ceres-solver-2.0.0.tar.gz
+RUN tar zxf ceres-solver-2.0.0.tar.gz
+RUN mkdir ceres-bin
+WORKDIR /workspace/compiled_libs/ceres-bin
+RUN cmake ../ceres-solver-2.0.0
+RUN make -j8
+RUN make test
+RUN make install
+
+
+# Other pip install
+RUN pip3 install pyvista
+RUN pip3 install --upgrade gdown
+
+
 # Setup user information
 ARG username0=bag
 ARG userid0=1085

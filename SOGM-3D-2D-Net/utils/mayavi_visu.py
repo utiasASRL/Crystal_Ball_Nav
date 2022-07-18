@@ -1,8 +1,8 @@
 #
 #
-#      0=================================0
-#      |    Kernel Point Convolutions    |
-#      0=================================0
+#      0==============================0
+#      |    Deep Collision Checker    |
+#      0==============================0
 #
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -25,6 +25,7 @@
 # Basic libs
 import torch
 import os
+import pickle
 os.environ.update(OMP_NUM_THREADS='1',
                   OPENBLAS_NUM_THREADS='1',
                   NUMEXPR_NUM_THREADS='1',
@@ -36,6 +37,8 @@ from os.path import exists, join
 import time
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.patches import Rectangle, Circle
+from matplotlib.widgets import Slider
 import imageio
 from PIL import Image
 
@@ -53,6 +56,103 @@ from utils.metrics import fast_confusion, IoU_from_confusions
 from utils.config import Config
 
 
+
+class Box:
+    """Box class"""
+
+    def __init__(self, x1, y1, x2, y2):
+        """
+        Initialize parameters here.
+        """
+        self.x1 = min(x1, x2)
+        self.y1 = min(y1, y2)
+        self.x2 = max(x1, x2)
+        self.y2 = max(y1, y2)
+
+        return
+
+    def dx(self):
+        return self.x2 - self.x1
+
+    def dy(self):
+        return self.y2 - self.y1
+
+    def plt_rect(self, edgecolor='black', facecolor='cyan', fill=False, lw=2):
+        return Rectangle((self.x1, self.y1), self.dx(), self.dy(),
+                         edgecolor=edgecolor,
+                         facecolor=facecolor,
+                         fill=fill,
+                         lw=lw)
+
+    def inside(self, x, y, margin=0):
+
+        if margin == 0:
+            return self.x1 < x < self.x2 and self.y1 < y < self.y2
+        else:
+            return self.x1 - margin < x < self.x2 + margin and self.y1 - margin < y < self.y2 + margin
+
+    def np_inside(self, X):
+
+        inside_mask = np.logical_and(self.x1 < X[:, 0], X[:, 0] < self.x2)
+        inside_mask = np.logical_and(inside_mask, self.y1 < X[:, 1])
+        inside_mask = np.logical_and(inside_mask, X[:, 1] < self.y2)
+
+        return inside_mask
+
+    def min_box_repulsive_vector(self, pos):
+
+        # Check along edges
+        edges = self.get_edges()
+        corners = self.get_corners()
+        found = False
+        min_mag = 1e9
+        min_normal = np.zeros((2,), dtype=np.float32)
+        for edge, corner in zip(edges, corners):
+
+            edge_l = np.linalg.norm(edge)
+            edge_dir = edge / edge_l
+
+            # Project position on edge
+            pos_vector = pos - corner
+            proj = np.dot(pos_vector, edge_dir)
+            proj_vec = proj * edge_dir
+
+            if 0 < proj < edge_l:
+                normal = pos_vector - proj_vec
+
+                if np.linalg.norm(normal) < min_mag:
+                    min_normal = normal
+                    min_mag = np.linalg.norm(normal)
+                    found = True
+
+        # Check in diagonal from corners
+        if not found:
+            min_mag = 1e9
+            for corner in corners:
+                pos_vector = pos - corner
+                dist = np.linalg.norm(pos_vector)
+                if dist < min_mag:
+                    min_mag = dist
+                    min_normal = pos_vector
+
+        return min_normal
+
+
+    def get_corners(self):
+
+        A = np.array([self.x1, self.y1])
+        B = np.array([self.x2, self.y1])
+        C = np.array([self.x2, self.y2])
+        D = np.array([self.x1, self.y2])
+
+        return [A, B, C, D]
+
+
+    def get_edges(self):
+
+        A, B, C, D = self.get_corners()
+
+        return [B - A, C - B, D - C, A - D]
 
 
 
@@ -1031,7 +1131,9 @@ def fast_save_future_anim(gif_name, future_imgs, zoom=1, correction=False):
     # Apply colorization
     if correction:
         colored_img = colorize_collisions(future_imgs)
-    
+    else:
+        colored_img = future_imgs
+
     # Apply zoom
     colored_img = zoom_collisions(colored_img, zoom)
 
@@ -1143,20 +1245,18 @@ def superpose_gt(pred_imgs, gt_imgs, ingt_imgs, ingts_fade=(50, -5)):
     return all_imgs
 
 
-def superpose_gt_contour(pred_imgs, gt_imgs, ingt_imgs, no_in=True):
+def SRM_colors(srm, static=False):
 
-    # Pred shape = [..., T, H, W, 3]
-    #   gt_shape = [..., T, H, W, 3]
-    # ingt_shape = [..., n, H, W, 3]
+    srm = srm.astype(np.float32) / 255
 
     # Define color palette
-    background = np.array([0, 0, 0], dtype=np.float64)
-    perma = np.array([1.0, 1.0, 0.0], dtype=np.float64)
-    longT = np.array([0.0, 0.0, 1.0], dtype=np.float64)
-    shortT1 = np.array([1.0, 0.0, 0.0], dtype=np.float64)
-    shortT2 = np.array([1.0, 0.0, 1.0], dtype=np.float64)
-    gt_shortT = np.array([0.0, 1.0, 1.0], dtype=np.float64)
-    past_shortT = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+    background = np.array([0, 0, 0], dtype=np.float32)
+    if static:
+        high = np.array([0.0, 1.0, 1.0], dtype=np.float32)
+        low = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    else:
+        high = np.array([1.0, 0.5, 0.0], dtype=np.float32)
+        low = np.array([1.0, 1.0, 0.0], dtype=np.float32)
 
     # Merge color function
     if np.mean(background) > 0.5:
@@ -1166,15 +1266,65 @@ def superpose_gt_contour(pred_imgs, gt_imgs, ingt_imgs, no_in=True):
 
     # Define colormaps
     resolution = 256
+    cmap_low = np.linspace(background, low, resolution)
+    cmap_high = np.linspace(low, high, resolution)
+    cmap_tot = (np.vstack((cmap_low, cmap_high)) * 255).astype(np.uint8)
+    
+    # Color future image
+    colored_img = np.ones(tuple(srm.shape) + (3,), dtype=np.float32)
+    colored_img *= background * 255
+    colored_img = colored_img.astype(np.uint8)
+    for cmap, values in zip([cmap_tot], [srm]):   
+        mask = values > 0.0001
+        pooled_cmap = cmap[np.around(values * (cmap.shape[0] - 1)).astype(np.int32)]
+        colored_img[mask] = merge_func(colored_img[mask], pooled_cmap[mask])
+
+    return colored_img
+
+
+
+
+
+def superpose_gt_contour(pred_imgs, gt_imgs, ingt_imgs, no_in=True, gt_im=False):
+
+    # Pred shape = [..., T, H, W, 3]
+    #   gt_shape = [..., T, H, W, 3]
+    # ingt_shape = [..., n, H, W, 3]
+
+    # Define color palette
+    background = np.array([0, 0, 0], dtype=np.float32)
+    perma = np.array([1.0, 1.0, 0.0], dtype=np.float32)
+    longT = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    shortT1 = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+    shortT2 = np.array([1.0, 0.0, 1.0], dtype=np.float32)
+    gt_shortT = np.array([0.0, 1.0, 1.0], dtype=np.float32)
+    past_shortT = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+
+    if gt_im:
+        shortT1 = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+        shortT2 = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+
+
+    # Merge color function
+    if np.mean(background) > 0.5:
+        merge_func = np.minimum
+    else:
+        merge_func = np.maximum
+        
+    # Define colormaps
+    resolution = 256
     cmap_perma = (np.linspace(background, perma, resolution) * 255).astype(np.uint8)
     cmap_longT = (np.linspace(background, longT, resolution) * 255).astype(np.uint8)
     cmap_gt_shortT = (np.linspace(background, gt_shortT, resolution) * 255).astype(np.uint8)
     cmap_past_shortT = (np.linspace(background, past_shortT, resolution) * 255).astype(np.uint8)
     cmap_shortT = np.vstack((np.linspace(background, shortT1, resolution), np.linspace(shortT1, shortT2, resolution)))
     cmap_shortT = (cmap_shortT * 255).astype(np.uint8)
-
+    
     # Create past and future images
-    future_imgs = (np.ones_like(pred_imgs) * background * 255).astype(np.uint8)
+    future_imgs = np.ones_like(pred_imgs)
+    future_imgs *= background * 255
+    future_imgs = future_imgs.astype(np.uint8)
+
     past_imgs = np.zeros_like(ingt_imgs).astype(np.uint8)
 
     # Color future image
@@ -1185,13 +1335,14 @@ def superpose_gt_contour(pred_imgs, gt_imgs, ingt_imgs, no_in=True):
         future_imgs[mask] = merge_func(future_imgs[mask], pooled_cmap[mask])
 
     # Add GT contour
-    mask = gt_imgs[..., 2] > 0.05
-    close_struct = np.ones((1, 1, 10, 10))
-    erode_struct = np.ones((1, 1, 5, 5))
-    mask = ndimage.binary_closing(mask, structure=close_struct, iterations=2)
-    mask = np.logical_and(mask, np.logical_not(ndimage.binary_erosion(mask, structure=erode_struct)))
-    gt_color = (past_shortT * 255).astype(np.uint8)
-    future_imgs[mask] = merge_func(future_imgs[mask], gt_color)
+    if not gt_im:
+        mask = gt_imgs[..., 2] > 0.05
+        close_struct = np.ones((1, 1, 10, 10))
+        erode_struct = np.ones((1, 1, 5, 5))
+        mask = ndimage.binary_closing(mask, structure=close_struct, iterations=2)
+        mask = np.logical_and(mask, np.logical_not(ndimage.binary_erosion(mask, structure=erode_struct)))
+        gt_color = (past_shortT * 255).astype(np.uint8)
+        future_imgs[mask] = merge_func(future_imgs[mask], gt_color)
 
     # Color past image
     for cmap, values in zip([cmap_perma, cmap_longT, cmap_past_shortT],
@@ -1205,7 +1356,7 @@ def superpose_gt_contour(pred_imgs, gt_imgs, ingt_imgs, no_in=True):
         all_imgs = future_imgs
     else:
         all_imgs = np.concatenate((past_imgs, future_imgs), axis=-4)
-    
+
     # # Add ghost of the input
     # mask = np.sum(ingt_imgs[..., 2], axis=-3, keepdims=True) > 0.05
     # bin_struct = np.ones((1, 1, 3, 3))
@@ -1562,10 +1713,6 @@ def show_risk_diffusion(collision_risk, dl=0.12, diff_range=1.5, p=5, show=True)
     imageio.mimsave('results/norm_risk.gif', (zoom_collisions(cm(static_normalized_visu), 5) * 255).astype(np.uint8), fps=20)
 
     return fig, anim
-
-
-
-
 
 
 

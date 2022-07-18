@@ -1,8 +1,8 @@
 #
 #
-#      0=================================0
-#      |    Kernel Point Convolutions    |
-#      0=================================0
+#      0==============================0
+#      |    Deep Collision Checker    |
+#      0==============================0
 #
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -53,12 +53,23 @@ class Config:
 
     # Size of 2D convolution grid
     dl_2D = 0.1
+    
+    # Radius of the 2D area 
+    radius_2D = 8.0
 
     # Power of the loss for the 2d predictions (use smaller prop loss when shared weights)
     power_2D_init_loss = 1.0
     power_2D_prop_loss = 0.5
     neg_pos_ratio = 3.0
     loss2D_version = 0
+    
+    # Power of the 2d future predictions loss for each class [permanent, movable, dynamic]
+    power_2D_class_loss = []
+
+    # Mutliplying factor between loss on the last and the first layer of future prediction
+    # factor is interpolated linearly between (1.0 and factor_2D_prop_loss) / sum_total at each layer
+    factor_2D_prop_loss = 1.0
+
     
     # Specification of the 2D networks composition
     init_2D_levels = 3
@@ -73,6 +84,9 @@ class Config:
 
     # Share weights for 2D network TODO: see if not sharing makes a difference
     shared_2D = False
+    
+    # Add a shortcut of initial 2D features to each sogm layer
+    skipcut_2D = False
 
     # Trainable backend 3D network
     apply_3D_loss = True
@@ -211,6 +225,9 @@ class Config:
 
     # Choose weights for class (used in segmentation loss). Empty list for no weights
     class_w = []
+    
+    # Balance class in sampler, using custom proportions
+    balance_proportions = []
 
     # Deformable offset loss
     # 'point2point' fitting geometry by penalizing distance from deform point to input points
@@ -301,8 +318,11 @@ class Config:
                 elif line_info[0] == 'lr_decay_epochs':
                     self.lr_decays = {int(b.split(':')[0]): float(b.split(':')[1]) for b in line_info[2:]}
 
-                elif line_info[0] in ['architecture', 'frozen_layers']:
+                elif line_info[0] in ['architecture']:
                     self.architecture = [b for b in line_info[2:]]
+
+                elif line_info[0] in ['frozen_layers']:
+                    self.frozen_layers = [b for b in line_info[2:]]
 
                 elif line_info[0] == 'augment_symmetries':
                     self.augment_symmetries = [bool(int(b)) for b in line_info[2:]]
@@ -315,6 +335,12 @@ class Config:
 
                 elif line_info[0] == 'class_w':
                     self.class_w = [float(w) for w in line_info[2:]]
+
+                elif line_info[0] == 'power_2D_class_loss':
+                    self.power_2D_class_loss = [float(w) for w in line_info[2:]]
+
+                elif line_info[0] == 'balance_proportions':
+                    self.balance_proportions = [float(w) for w in line_info[2:]]
 
                 elif hasattr(self, line_info[0]):
                     attr_type = type(getattr(self, line_info[0]))
@@ -344,17 +370,21 @@ class Config:
                                'dl_2D',
                                'power_2D_init_loss',
                                'power_2D_prop_loss',
+                               'factor_2D_prop_loss',
+                               'power_2D_class_loss',
                                'neg_pos_ratio',
                                'loss2D_version',
                                'pretrained_3D',
                                'detach_2D',
                                'shared_2D',
+                               'skipcut_2D',
                                'apply_3D_loss',
                                'use_visibility',
                                'init_2D_levels',
                                'init_2D_resnets',
                                'prop_2D_resnets',
                                'frozen_layers']
+
 
             for param in parameters_list:
                 if hasattr(self, param):
@@ -393,6 +423,7 @@ class Config:
             text_file.write('in_points_dim = {:d}\n'.format(self.in_points_dim))
             text_file.write('in_features_dim = {:d}\n'.format(self.in_features_dim))
             text_file.write('in_radius = {:.6f}\n'.format(self.in_radius))
+            text_file.write('radius_2D = {:.6f}\n'.format(self.radius_2D))
             text_file.write('input_threads = {:d}\n'.format(self.input_threads))
 
             # Model parameters
@@ -469,6 +500,10 @@ class Config:
             text_file.write('segloss_balance = {:s}\n'.format(self.segloss_balance))
             text_file.write('class_w =')
             for a in self.class_w:
+                text_file.write(' {:.6f}'.format(a))
+            text_file.write('\n')
+            text_file.write('balance_proportions =')
+            for a in self.balance_proportions:
                 text_file.write(' {:.6f}'.format(a))
             text_file.write('\n')
             text_file.write('deform_fitting_mode = {:s}\n'.format(self.deform_fitting_mode))

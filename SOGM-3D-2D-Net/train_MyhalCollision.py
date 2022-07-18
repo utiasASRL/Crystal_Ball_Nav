@@ -1,8 +1,8 @@
 #
 #
-#      0=================================0
-#      |    Kernel Point Convolutions    |
-#      0=================================0
+#      0==============================0
+#      |    Deep Collision Checker    |
+#      0==============================0
 #
 #
 # ----------------------------------------------------------------------------------------------------------------------
@@ -33,13 +33,9 @@ os.environ.update(OMP_NUM_THREADS='1',
 import numpy as np
 import torch
 
-
 # Dataset
-from slam.PointMapSLAM import pointmap_slam, detect_short_term_movables, annotation_process
-from slam.dev_slam import bundle_slam, pointmap_for_AMCL
 from torch.utils.data import DataLoader
-from datasets.MyhalCollision import MyhalCollisionDataset, MyhalCollisionSlam, MyhalCollisionSampler, \
-    MyhalCollisionCollate
+from datasets.MyhalCollision import MyhalCollisionDataset, MyhalCollisionSampler, MyhalCollisionCollate
 
 from utils.config import Config
 from utils.trainer import ModelTrainer
@@ -47,6 +43,8 @@ from models.architectures import KPCollider
 
 from os.path import exists, join
 from os import makedirs
+
+from MyhalCollision_sessions import UTI3D_H_sessions, UTI3D_A_sessions, UTI3D_A_sessions_v2
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -104,24 +102,38 @@ class MyhalCollisionConfig(Config):
     ######################
 
     # Number of propagating layer
-    n_2D_layers = 30
+    n_2D_layers = 40
 
     # Total time propagated
-    T_2D = 3.0
+    T_2D = 4.0
 
     # Size of 2D convolution grid
     dl_2D = 0.12
 
+    # Radius of the considered arear in 2D
+    radius_2D = 8.0
+
     # Power of the loss for the 2d predictions (use smaller prop loss when shared weights)
     power_2D_init_loss = 1.0
     power_2D_prop_loss = 50.0
-    neg_pos_ratio = 1.0
+    neg_pos_ratio = 0.5
     loss2D_version = 2
 
+    # Power of the 2d future predictions loss for each class [permanent, movable, dynamic]
+    power_2D_class_loss = [1.0, 1.0, 2.0]
+
+    # Mutliplying factor between loss on the last and the first layer of future prediction
+    # factor is interpolated linearly between (1.0 and factor_2D_prop_loss) / sum_total at each layer
+    factor_2D_prop_loss = 2.0
+    
+    # Balance class in sampler, using custom proportions
+    # It can have an additionnal value (one more than num_classes), to encode the proportion of simulated data we use for training
+    balance_proportions = [0, 0, 1, 1, 20, 1.0]
+
     # Specification of the 2D networks composition
-    init_2D_levels = 4      # 3
-    init_2D_resnets = 3     # 2
-    prop_2D_resnets = 3     # 2
+    init_2D_levels = 3      # 3
+    init_2D_resnets = 2     # 2
+    prop_2D_resnets = 2     # 2
 
     # Path to a pretrained 3D network. if empty, ignore, if 'todo', then only train 3D part of the network.
     #pretrained_3D = 'Log_2021-01-27_18-53-05'
@@ -132,6 +144,7 @@ class MyhalCollisionConfig(Config):
 
     # Share weights for 2D network TODO: see if not sharing makes a difference
     shared_2D = False
+    skipcut_2D = False
 
     # Trainable backend 3D network
     apply_3D_loss = True
@@ -153,7 +166,7 @@ class MyhalCollisionConfig(Config):
     max_val_points = -1
 
     # Choice of input features
-    first_features_dim = 100
+    first_features_dim = 128
 
     # Number of batch
     batch_num = 6
@@ -163,7 +176,7 @@ class MyhalCollisionConfig(Config):
     num_kernel_points = 15
 
     # Size of the first subsampling grid in meter
-    first_subsampling_dl = 0.06
+    first_subsampling_dl = 0.12
 
     # Radius of convolution in "number grid cell". (2.5 is the standard value)
     conv_radius = 2.5
@@ -200,26 +213,27 @@ class MyhalCollisionConfig(Config):
     #####################
 
     # Maximal number of epochs
-    max_epoch = 1000
+    max_epoch = 250
 
     # Learning rate management
     learning_rate = 1e-2
     momentum = 0.98
-    lr_decays = {i: 0.1 ** (1 / 120) for i in range(1, max_epoch)}
+    lr_decays = {i: 0.1 ** (1 / 60) for i in range(1, max_epoch)}
+    #lr_decays = {150: 0.1, 200: 0.1, 250: 0.1}
     grad_clip_norm = 100.0
 
     # Number of steps per epochs
     epoch_steps = 500
 
     # Number of validation examples per epoch
-    validation_size = 30
+    validation_size = 15
 
     # Number of epoch between each checkpoint
-    checkpoint_gap = 20
+    checkpoint_gap = 40
 
     # Augmentations
     augment_scale_anisotropic = False
-    augment_symmetries = [False, False, False]
+    augment_symmetries = [True, False, False]
     augment_rotation = 'vertical'
     augment_scale_min = 0.99
     augment_scale_max = 1.01
@@ -275,56 +289,55 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
     chosen_gpu = int(GPU_ID)
 
-    ###################
-    # Training sessions
-    ###################
+    #############################
+    # Additionnal Simulation data
+    #############################
 
-    # Day used as map
-    map_day = '2020-10-02-13-39-05'
+    sim_path = '../Data/Simulation'
 
-    train_days_RandBounce = ['2021-05-15-23-15-09',
-                             '2021-05-15-23-33-25',
-                             '2021-05-15-23-54-50',
-                             '2021-05-16-00-44-53',
-                             '2021-05-16-01-09-43',
-                             '2021-05-16-20-37-47',
-                             '2021-05-16-20-59-49',
-                             '2021-05-16-21-22-30',
-                             '2021-05-16-22-26-45',
-                             '2021-05-16-22-51-06',
-                             '2021-05-16-23-34-15',
-                             '2021-05-17-01-21-44',
-                             '2021-05-17-01-37-09',
-                             '2021-05-17-01-58-57',
-                             '2021-05-17-02-34-27',
-                             '2021-05-17-02-56-02',
-                             '2021-05-17-03-54-39',
-                             '2021-05-17-05-26-10',
-                             '2021-05-17-05-41-45']
+    # train_days_RandBounce = ['2021-05-15-23-15-09',
+    #                          '2021-05-15-23-33-25',
+    #                          '2021-05-15-23-54-50',
+    #                          '2021-05-16-00-44-53',
+    #                          '2021-05-16-01-09-43',
+    #                          '2021-05-16-20-37-47',
+    #                          '2021-05-16-20-59-49',
+    #                          '2021-05-16-21-22-30',
+    #                          '2021-05-16-22-26-45',
+    #                          '2021-05-16-22-51-06',
+    #                          '2021-05-16-23-34-15',
+    #                          '2021-05-17-01-21-44',
+    #                          '2021-05-17-01-37-09',
+    #                          '2021-05-17-01-58-57',
+    #                          '2021-05-17-02-34-27',
+    #                          '2021-05-17-02-56-02',
+    #                          '2021-05-17-03-54-39',
+    #                          '2021-05-17-05-26-10',
+    #                          '2021-05-17-05-41-45']
 
-    train_days_RandWand = ['2021-05-17-14-04-52',
-                           '2021-05-17-14-21-56',
-                           '2021-05-17-14-44-46',
-                           '2021-05-17-15-26-04',
-                           '2021-05-17-15-50-45',
-                           '2021-05-17-16-14-26',
-                           '2021-05-17-17-02-17',
-                           '2021-05-17-17-27-02',
-                           '2021-05-17-17-53-42',
-                           '2021-05-17-18-46-44',
-                           '2021-05-17-19-02-37',
-                           '2021-05-17-19-39-19',
-                           '2021-05-17-20-14-57',
-                           '2021-05-17-20-48-53',
-                           '2021-05-17-21-36-22',
-                           '2021-05-17-22-16-13',
-                           '2021-05-17-22-40-46',
-                           '2021-05-17-23-08-01',
-                           '2021-05-17-23-48-22',
-                           '2021-05-18-00-07-26',
-                           '2021-05-18-00-23-15',
-                           '2021-05-18-00-44-33',
-                           '2021-05-18-01-24-07']
+    # train_days_RandWand = ['2021-05-17-14-04-52',
+    #                        '2021-05-17-14-21-56',
+    #                        '2021-05-17-14-44-46',
+    #                        '2021-05-17-15-26-04',
+    #                        '2021-05-17-15-50-45',
+    #                        '2021-05-17-16-14-26',
+    #                        '2021-05-17-17-02-17',
+    #                        '2021-05-17-17-27-02',
+    #                        '2021-05-17-17-53-42',
+    #                        '2021-05-17-18-46-44',
+    #                        '2021-05-17-19-02-37',
+    #                        '2021-05-17-19-39-19',
+    #                        '2021-05-17-20-14-57',
+    #                        '2021-05-17-20-48-53',
+    #                        '2021-05-17-21-36-22',
+    #                        '2021-05-17-22-16-13',
+    #                        '2021-05-17-22-40-46',
+    #                        '2021-05-17-23-08-01',
+    #                        '2021-05-17-23-48-22',
+    #                        '2021-05-18-00-07-26',
+    #                        '2021-05-18-00-23-15',
+    #                        '2021-05-18-00-44-33',
+    #                        '2021-05-18-01-24-07']
 
     train_days_RandFlow = ['2021-06-02-19-55-16',
                            '2021-06-02-20-33-09',
@@ -343,49 +356,62 @@ if __name__ == '__main__':
                            '2021-06-03-21-32-44',
                            '2021-06-03-21-57-08']
 
+    
+    # Additional train and validation  from simulation
+    sim_train_days = np.array(train_days_RandFlow)
+    sim_val_inds = [0, 1, 2]
+    sim_train_inds = [i for i in range(len(sim_train_days)) if i not in sim_val_inds]
+
+    # Disable simulation HERE
+    # sim_path = ''
+
+
+    ###################
+    # Training sessions
+    ###################
+
+    # Get sessions from the annotation script
+    dataset_path, map_day, refine_sessions, train_days, train_comments = UTI3D_A_sessions_v2()
+
+    # Get training and validation sets
+    val_inds = np.array([i for i, c in enumerate(train_comments) if 'val' in c.split('>')[0]])
 
     ######################
     # Automatic Annotation
     ######################
 
-    # Choose the dataset between train_days_RandBounce, train_days_RandWand, or train_days_RandFlow
-    train_days = np.array(train_days_RandBounce)
+    # See annotate_MyhalCollision.py
 
-    # Validation sessions
-    val_inds = [0, 1, 2]
-    train_inds = [i for i in range(len(train_days)) if i not in val_inds]
+    # # Check if we need to redo annotation (only if there is no collison folder)
+    # redo_annot = False
+    # for day in train_days:
+    #     annot_path = join(dataset_path, 'collisions', day)
+    #     if not exists(annot_path):
+    #         redo_annot = True
+    #         break
 
-    # Check if we need to redo annotation (only if there is no collison folder)
-    redo_annot = False
-    for day in train_days:
-        annot_path = join('../Data/Simulation/collisions', day)
-        if not exists(annot_path):
-            redo_annot = True
-            break
+    # # To perform annnotation use the annotate_MyhalCollisions.py script
+    # redo_annot = False
 
-    # train_days = ['2020-10-20-16-30-49']
-    # redo_annot = True
-    if redo_annot:
-
-        # Initiate dataset
-        slam_dataset = MyhalCollisionSlam(day_list=train_days, map_day=map_day)
-
-        # Create a refined map from the map_day.
-        # UNCOMMENT THIS LINE if you are using your own data for the first time
-        # COMMENT THIS LINE if you already have a nice clean map of the environment as a point cloud 
-        # like this one: Data/Simulation/slam_offline/2020-10-02-13-39-05/map_update_0001.ply
-
-        # slam_dataset.refine_map()  
-
-        # Groundtruth annotation
-        annotation_process(slam_dataset, on_gt=False)
-
-        # TODO: Loop closure for aligning days together when not simulation
-
-        # Annotation of preprocessed 2D+T point clouds for SOGM generation
-        slam_dataset.collision_annotation()
-
-        print('annotation finished')
+    # if redo_annot:
+    #
+    #     # Initiate dataset
+    #     slam_dataset = MyhalCollisionSlam(day_list=train_days, map_day=map_day, dataset_path=dataset_path)
+    #
+    #     # Create a refined map from the map_day.
+    #     # UNCOMMENT THIS LINE if you are using your own data for the first time
+    #     # COMMENT THIS LINE if you already have a nice clean map of the environment as a point cloud
+    #     # like this one: Data/Simulation/slam_offline/2020-10-02-13-39-05/map_update_0001.ply
+    #
+    #     slam_dataset.refine_map()
+    #
+    #     # Groundtruth annotation
+    #     annotation_process(slam_dataset, on_gt=False)
+    #
+    #     # Annotation of preprocessed 2D+T point clouds for SOGM generation
+    #     slam_dataset.collision_annotation()
+    #
+    #     print('annotation finished')
 
     ##############
     # Prepare Data
@@ -394,6 +420,18 @@ if __name__ == '__main__':
     print()
     print('Data Preparation')
     print('****************')
+
+    # Validation sessions
+    train_inds = [i for i in range(len(train_days)) if i not in val_inds]
+    
+
+    # TMP, lifelong learning exp. Use trains inds up to :7, :17, :25, :all
+    # train_inds = train_inds[:25]
+    # train_inds = train_inds[:17]
+    # train_inds = train_inds[:7]
+
+    # Then, add simulation data
+
 
     # Initialize configuration class
     config = MyhalCollisionConfig()
@@ -441,7 +479,6 @@ if __name__ == '__main__':
             if attr_name not in kept_params:
                 setattr(config, attr_name, getattr(prev_config, attr_name))
 
-
     # Get path from argument if given
     if len(sys.argv) > 1:
         config.saving_path = sys.argv[1]
@@ -477,11 +514,23 @@ if __name__ == '__main__':
     #####################
 
     # Initialize datasets (dummy validation)
-    training_dataset = MyhalCollisionDataset(config, train_days[train_inds], chosen_set='training', balance_classes=True)
-    test_dataset = MyhalCollisionDataset(config, train_days[val_inds], chosen_set='validation', balance_classes=False)
+    training_dataset = MyhalCollisionDataset(config,
+                                             train_days[train_inds],
+                                             chosen_set='training',
+                                             dataset_path=dataset_path,
+                                             balance_classes=True,
+                                             add_sim_path=sim_path,
+                                             add_sim_days=sim_train_days[sim_train_inds])
+    test_dataset = MyhalCollisionDataset(config,
+                                         train_days[val_inds],
+                                         chosen_set='validation',
+                                         dataset_path=dataset_path,
+                                         balance_classes=False,
+                                         add_sim_path=sim_path,
+                                         add_sim_days=sim_train_days[sim_val_inds])
 
     # Initialize samplers
-    training_sampler = MyhalCollisionSampler(training_dataset)
+    training_sampler = MyhalCollisionSampler(training_dataset, manual_training_frames=True)
     test_sampler = MyhalCollisionSampler(test_dataset)
 
     # Initialize the dataloader
@@ -502,11 +551,12 @@ if __name__ == '__main__':
     if config.max_in_points < 0:
         config.max_in_points = 1e9
         training_loader.dataset.max_in_p = 1e9
-        training_sampler.calib_max_in(config, training_loader, untouched_ratio=0.9, verbose=True)
+        training_sampler.calib_max_in(config, training_loader, untouched_ratio=0.9, verbose=True, force_redo=False)
     if config.max_val_points < 0:
         config.max_val_points = 1e9
         test_loader.dataset.max_in_p = 1e9
-        test_sampler.calib_max_in(config, test_loader, untouched_ratio=0.95, verbose=True)
+        test_sampler.calib_max_in(config, test_loader, untouched_ratio=0.95, verbose=True, force_redo=False)
+
 
     # Calibrate samplers
     training_sampler.calibration(training_loader, verbose=True)

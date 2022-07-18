@@ -1,6 +1,7 @@
 
 #include "icp.h"
 
+int count_iter = 0;
 
 
 // Utils
@@ -36,44 +37,6 @@ void regu_pose_cycle(vector<Eigen::Matrix4d>& H, vector<float>& H_w)
 }
 
 
-Eigen::Matrix4d pose_interp(float t, Eigen::Matrix4d const& H1, Eigen::Matrix4d const& H2, int verbose)
-{
-	// Assumes 0 < t < 1
-	Eigen::Matrix3d R1 = H1.block(0, 0, 3, 3);
-	Eigen::Matrix3d R2 = H2.block(0, 0, 3, 3);
-
-	// Rotations to quaternions
-	Eigen::Quaternion<double> rot1(R1);
-	Eigen::Quaternion<double> rot2(R2);
-	Eigen::Quaternion<double> rot3 = rot1.slerp(t, rot2);
-
-	// ------------------ ICI ----------------------
-
-	if (verbose > 0)
-	{
-		cout << R2.determinant() << endl;
-		cout << R2 << endl;
-		cout << "[" << rot1.x() << " " << rot1.y() << " " << rot1.z() << " " << rot1.w() << "] -> ";
-		cout << "[" << rot2.x() << " " << rot2.y() << " " << rot2.z() << " " << rot2.w() << "] / " << t << endl;
-		cout << "[" << rot3.x() << " " << rot3.y() << " " << rot3.z() << " " << rot3.w() << "]" << endl;
-		cout << rot2.toRotationMatrix() << endl;
-		cout << rot3.toRotationMatrix() << endl;
-	}
-
-	// Translations to vectors
-	Eigen::Vector3d trans1 = H1.block(0, 3, 3, 1);
-	Eigen::Vector3d trans2 = H2.block(0, 3, 3, 1);
-
-	// Interpolation (not the real geodesic path, but good enough)
-	Eigen::Affine3d result;
-	result.translation() = (1.0 - t) * trans1 + t * trans2;
-	result.linear() = rot1.slerp(t, rot2).normalized().toRotationMatrix();
-
-	return result.matrix();
-}
-
-
-
 // Minimizer
 // *********
 
@@ -96,7 +59,7 @@ void SolvePoint2PlaneLinearSystem(const Matrix6d& A, const Vector6d& b, Vector6d
 		const Matrix Q1t = Aqr.matrixQ().transpose().block(0, 0, rank, rows);
 		const Matrix R1 = (Q1t * A * Aqr.colsPermutation()).block(0, 0, rank, rows);
 
-		const bool findMinimalNormSolution = true; // TODO is that what we want?
+		const bool findMinimalNormSolution = true; // is that what we want?
 
 		// The under-determined system R1 x = Q1^T b is made unique ..
 		if (findMinimalNormSolution) {
@@ -135,13 +98,14 @@ void SolvePoint2PlaneLinearSystem(const Matrix6d& A, const Vector6d& b, Vector6d
 	}
 }
 
-
-void PointToPlaneErrorMinimizer(vector<PointXYZ>& targets,
-	vector<PointXYZ>& references,
-	vector<PointXYZ>& refNormals,
-	vector<float>& weights,
-	vector<pair<size_t, size_t>>& sample_inds,
-	Eigen::Matrix4d& mOut)
+void PointToPlaneErrorMinimizer(vector<PointXYZ> &targets,
+								vector<PointXYZ> &references,
+								vector<PointXYZ> &refNormals,
+								vector<float> &weights,
+								vector<pair<size_t, size_t>> &sample_inds,
+								Eigen::Matrix4d &mOut,
+								vector<bool> &is_ground,
+								double ground_z)
 {
 	// See: "Linear Least-Squares Optimization for Point-to-Plane ICP Surface Registration" (Kok-Lim Low)
 	// init A and b matrice
@@ -153,6 +117,7 @@ void PointToPlaneErrorMinimizer(vector<PointXYZ>& targets,
 	// Fill matrices values
 	bool tgt_weights = weights.size() == targets.size();
 	bool ref_weights = weights.size() == references.size();
+	bool force_flat_ground = is_ground.size() == sample_inds.size();
 	int i = 0;
 	for (const auto& ind : sample_inds)
 	{
@@ -164,12 +129,33 @@ void PointToPlaneErrorMinimizer(vector<PointXYZ>& targets,
 		// Reference point
 		double dx = (double)references[ind.second].x;
 		double dy = (double)references[ind.second].y;
-		double dz = (double)references[ind.second].z;
+		double dz;
 
 		// Reference point normal
-		double nx = (double)refNormals[ind.second].x;
-		double ny = (double)refNormals[ind.second].y;
-		double nz = (double)refNormals[ind.second].z;
+		double nx;
+		double ny;
+		double nz;
+
+		// Special case to force a flat ground
+		double score = 1.0;
+		if (force_flat_ground && is_ground[i])
+		{
+			dz = ground_z;
+			nx = 0;
+			ny = 0;
+			nz = 1;
+		}
+		else
+		{
+			dz = (double)references[ind.second].z;
+			nz = (double)refNormals[ind.second].z;
+			nx = (double)refNormals[ind.second].x;
+			ny = (double)refNormals[ind.second].y;
+			if (tgt_weights)
+				score = (double)weights[ind.first];
+			else if (ref_weights)
+				score = (double)weights[ind.second];
+		}
 
 		// setup least squares system
 		A(i, 0) = nz * sy - ny * sz;
@@ -181,10 +167,7 @@ void PointToPlaneErrorMinimizer(vector<PointXYZ>& targets,
 		b(i, 0) = nx * dx + ny * dy + nz * dz - nx * sx - ny * sy - nz * sz;
 
 		// Apply weights if needed
-		if (tgt_weights)
-			wA.row(i) = A.row(i) * (double)weights[ind.first];
-		else if (ref_weights)
-			wA.row(i) = A.row(i) * (double)weights[ind.second];
+		wA.row(i) = A.row(i) * score;
 		i++;
 	}
 
@@ -221,12 +204,93 @@ void PointToPlaneErrorMinimizer(vector<PointXYZ>& targets,
 	}
 }
 
+void RandomPointAssociation(vector<size_t> &w_inds,
+							PointMap &map,
+							vector<PointXYZ> &aligned,
+							vector<pair<size_t, size_t>> &sample_inds,
+							default_random_engine &generator,
+							discrete_distribution<int> &distribution,
+							nanoflann::SearchParams &search_params,
+							float &max_planar_d,
+							ICP_params &params,
+							ICP_results &results)
+{
 
+	// Parameters
+	size_t N = w_inds.size();
+	float max_pair_d2 = params.max_pairing_dist * params.max_pairing_dist;
+	float rms2 = 0;
+	float prms2 = 0;
+
+	// Specific behavior in case the input frame does not have enough points
+	if (params.n_samples > N)
+	{
+		char buffer[300];
+		sprintf(buffer, "\nERROR: ICP want %d samples but input frame only has %d inliers\n", int(params.n_samples), int(N));
+		throw std::invalid_argument(string(buffer));
+	}
+
+	// Init picking containers
+	unordered_set<size_t> unique_inds;
+	unique_inds.reserve(N);
+	vector<size_t> valid_inds;
+	valid_inds.reserve(params.n_samples);
+	sample_inds.reserve(params.n_samples);
+	
+	// Random picking
+	int count_tries = 0;
+	while (sample_inds.size() < params.n_samples && count_tries < (int)params.n_samples * 10)
+	{
+		// Weighted random pick among inliers
+		pair<size_t, size_t> assoc;
+		assoc.first = w_inds[distribution(generator)];
+
+		// Ensure pick has not already been tried
+		if (unique_inds.count(assoc.first))
+		{
+			count_tries++;
+			continue;
+		}
+		else
+			unique_inds.insert(assoc.first);
+
+		// get nearest neighbor
+		float nn_d2;
+		nanoflann::KNNResultSet<float> resultSet(1);
+		resultSet.init(&assoc.second, &nn_d2);
+		map.tree.findNeighbors(resultSet, (float*)&aligned[assoc.first], search_params);
+
+		// Add point to the association if it is good
+		if (nn_d2 < max_pair_d2)
+		{
+			// Check planar distance (only after a few steps for initial alignment)
+			PointXYZ diff = (map.cloud.pts[assoc.second] - aligned[assoc.first]);
+			float planar_dist = abs(diff.dot(map.normals[assoc.second]));
+			if (planar_dist < max_planar_d)
+			{
+				// Keep samples
+				sample_inds.push_back(assoc);
+
+				// Update pt2pt rms
+				rms2 += nn_d2;
+
+				// update pt2pl rms
+				prms2 += planar_dist * planar_dist;
+			}
+		}
+
+		count_tries++;
+	}
+	
+	// Compute RMS
+	results.all_rms.push_back(sqrt(rms2 / (float)sample_inds.size()));
+	results.all_plane_rms.push_back(sqrt(prms2 / (float)sample_inds.size()));
+
+	return;
+}
 
 // ICP functions
 // *************
-
-
 
 void BundleICP(vector<PointXYZ>& points,
 	vector<PointXYZ>& normals,
@@ -451,7 +515,8 @@ void BundleICP(vector<PointXYZ>& points,
 		{
 			// Do not use weights in minimization, because we used them for random sampling
 			vector<float> ones(weights.size(), 1.0);
-			PointToPlaneErrorMinimizer(points, references, normals, ones, all_sample_inds[b], H_icp[b]);
+			vector<bool> is_ground;
+			PointToPlaneErrorMinimizer(points, references, normals, ones, all_sample_inds[b], H_icp[b], is_ground);
 		}
 
 		t[3] = std::clock();
@@ -625,8 +690,8 @@ void BundleICP(vector<PointXYZ>& points,
 		///////////// DEBUG /////////////
 
 		//
-		//	TODO: convergence check with RMSdiff? R_diff and T_diff?
-		//	TODO: residual error on full cloud?
+		//	convergence check with RMSdiff? R_diff and T_diff?
+		//	residual error on full cloud?
 		//
 	}
 
@@ -719,7 +784,7 @@ void PointToMapICPDebug(vector<PointXYZ>& tgt_pts,
 	map_cloud.pts = map_points;
 
 	// Tree parameters
-	nanoflann::KDTreeSingleIndexAdaptorParams tree_params(10 /* max leaf */);
+	nanoflann::KDTreeSingleIndexAdaptorParams tree_params(10);
 
 	// Vector of trees
 	PointXYZ_KDTree map_tree(3, map_cloud, tree_params);
@@ -749,7 +814,8 @@ void PointToMapICPDebug(vector<PointXYZ>& tgt_pts,
 	results.transform = params.init_transform;
 
 	// Random generator
-	default_random_engine generator;
+  	unsigned seed = chrono::system_clock::now().time_since_epoch().count();
+	default_random_engine generator(seed);
 	discrete_distribution<int> distribution(tgt_w.begin(), tgt_w.end());
 
 	// Init result containers
@@ -854,7 +920,8 @@ void PointToMapICPDebug(vector<PointXYZ>& tgt_pts,
 		//////////////////
 
 		// Minimize error
-		PointToPlaneErrorMinimizer(aligned, map_points, map_normals, map_scores, filtered_sample_inds, H_icp);
+		vector<bool> is_ground;
+		PointToPlaneErrorMinimizer(aligned, map_points, map_normals, map_scores, filtered_sample_inds, H_icp, is_ground, params.ground_z);
 
 		t[4] = std::clock();
 
@@ -1030,8 +1097,9 @@ void PointToMapICPDebug(vector<PointXYZ>& tgt_pts,
 }
 
 
-void PointToMapICP(vector<PointXYZ>& tgt_pts,
-	vector<float>& tgt_w,
+
+void PointToMapICP(vector<PointXYZ>& tgt_pts, vector<float>& tgt_t,
+	vector<double>& tgt_w,
 	PointMap& map,
 	ICP_params& params,
 	ICP_results& results)
@@ -1040,23 +1108,10 @@ void PointToMapICP(vector<PointXYZ>& tgt_pts,
 	// **********
 
 	size_t N = tgt_pts.size();
-	float max_pair_d2 = params.max_pairing_dist * params.max_pairing_dist;
-	float max_planar_d = params.max_planar_dist;
 	size_t first_steps = params.avg_steps / 2 + 1;
 
-	// Get angles phi of each points for motion distortion
-	vector<float> phis;
-	float phi1 = 0;
-	if (params.motion_distortion)
-	{
-		phis.reserve(tgt_pts.size());
-		for (auto& p : tgt_pts)
-		{
-			phis.push_back(fmod(3 * M_PI / 2 - atan2(p.y, p.x), 2 * M_PI));
-			if (phis.back() > phi1)
-				phi1 = phis.back();
-		}
-	}
+	// Initially use a large associating dist (we change that during the interations)
+	float max_planar_d = 4 * params.max_planar_dist;
 
 	// Create search parameters
 	nanoflann::SearchParams search_params;
@@ -1076,20 +1131,48 @@ void PointToMapICP(vector<PointXYZ>& tgt_pts,
 	Eigen::Map<Eigen::Matrix<float, 3, Eigen::Dynamic>> aligned_mat((float*)aligned.data(), 3, N);
 
 	// Apply initial transformation
-	Eigen::Matrix3f R_init = (params.init_transform.block(0, 0, 3, 3)).cast<float>();
-	Eigen::Vector3f T_init = (params.init_transform.block(0, 3, 3, 1)).cast<float>();
-	aligned_mat = (R_init * targets_mat).colwise() + T_init;
-	results.transform = params.init_transform;
+	results.transform = params.init_transform;	
+	if (params.motion_distortion)	
+	{	
+		size_t i_inds = 0;	
+		for (auto& t : tgt_t)	
+		{	
+			Eigen::Matrix4d H_rect = pose_interp(t, params.last_transform0, results.transform, 0);			
+			Eigen::Matrix3f R_rect = (H_rect.block(0, 0, 3, 3)).cast<float>();	
+			Eigen::Vector3f T_rect = (H_rect.block(0, 3, 3, 1)).cast<float>();	
+			aligned_mat.col(i_inds) = (R_rect * targets_mat.col(i_inds)) + T_rect;	
+			i_inds++;	
+		}	
+	}	
+	else	
+	{	
+		Eigen::Matrix3f R_tot = (results.transform.block(0, 0, 3, 3)).cast<float>();	
+		Eigen::Vector3f T_tot = (results.transform.block(0, 3, 3, 1)).cast<float>();	
+		aligned_mat = (R_tot * targets_mat).colwise() + T_tot;	
+	}
 
-	// Random generator
-	default_random_engine generator;
-	discrete_distribution<int> distribution(tgt_w.begin(), tgt_w.end());
+	// Random generator (ignoring outliers)
+	vector<double> filtered_w;
+	vector<size_t> filtered_wi;
+	filtered_w.reserve(tgt_w.size());
+	size_t w_i = 0;
+	for (auto w : tgt_w)
+	{
+		if (w > 0.05)
+		{
+			filtered_w.push_back(w);
+			filtered_wi.push_back(w_i);
+		}
+		w_i++;
+	}
+  	unsigned seed = chrono::system_clock::now().time_since_epoch().count();
+	default_random_engine generator(seed);
+	discrete_distribution<int> distribution(filtered_w.begin(), filtered_w.end());
 
 	// Init result containers
 	Eigen::Matrix4d H_icp;
 	results.all_rms.reserve(params.max_iter);
 	results.all_plane_rms.reserve(params.max_iter);
-
 
 	// Convergence varaibles
 	float mean_dT = 0;
@@ -1097,109 +1180,73 @@ void PointToMapICP(vector<PointXYZ>& tgt_pts,
 	size_t max_it = params.max_iter;
 	bool stop_cond = false;
 
-	vector<clock_t> t(6);
-	vector<string> clock_str;
-	clock_str.push_back("Random_Sample ... ");
-	clock_str.push_back("KNN_search ...... ");
-	clock_str.push_back("Optimization .... ");
-	clock_str.push_back("Regularization .. ");
-	clock_str.push_back("Result .......... ");
+	// vector<clock_t> t(6);
+	// vector<string> clock_str;
+	// clock_str.push_back("Random_Sample ... ");
+	// clock_str.push_back("KNN_search ...... ");
+	// clock_str.push_back("Optimization .... ");
+	// clock_str.push_back("Regularization .. ");
+	// clock_str.push_back("Result .......... ");
+	
+	// // Debug (save map.cloud.pts)
+	// string path = "/home/hth/Deep-Collison-Checker/SOGM-3D-2D-Net/results/";
+	// char buffer[100];
+	// char buffer_check[100];
+	// sprintf(buffer, "f_%03d_map.ply", int(count_iter));
+	// sprintf(buffer_check, "f_%03d_init.ply", int(count_iter));
+	// string filepath = path + string(buffer);
+	// string filepath_check = path + string(buffer_check);
+	// save_cloud(filepath, map.cloud.pts, map.normals);
+	// save_cloud(filepath_check, aligned, tgt_t);
 
 	for (size_t step = 0; step < max_it; step++)
 	{
 		/////////////////
 		// Association //
 		/////////////////
+		
 
-		// Pick random queries (use unordered set to ensure uniqueness)
+		// Update association distance after a few iterations
+		if (step == first_steps)
+			max_planar_d = params.max_planar_dist;
+
 		vector<pair<size_t, size_t>> sample_inds;
-		if (params.n_samples < N)
+
+		RandomPointAssociation(filtered_wi, map, aligned,
+							   sample_inds,
+							   generator, distribution,
+							   search_params, max_planar_d,
+							   params, results);
+
+		// Verify if we have enough
+			
+		if (params.n_samples > sample_inds.size())
 		{
-			unordered_set<size_t> unique_inds;
-			while (unique_inds.size() < params.n_samples)
-				unique_inds.insert((size_t)distribution(generator));
-
-			sample_inds = vector<pair<size_t, size_t>>(params.n_samples);
-			size_t i = 0;
-			for (const auto& ind : unique_inds)
-			{
-				sample_inds[i].first = ind;
-				i++;
-			}
+			char buffer[300];
+			sprintf(buffer, "WARNING: ICP want %d samples but only %d valid associations have been found\n", int(params.n_samples), int(sample_inds.size()));
+			throw std::invalid_argument(string(buffer));
 		}
-		else
-		{
-			sample_inds = vector<pair<size_t, size_t>>(N);
-			for (size_t i = 0; i < N; i++)
-			{
-				sample_inds[i].first = i;
-				i++;
-			}
-		}
-
-		t[1] = std::clock();
-
-		// Init neighbors container
-		vector<float> nn_dists(sample_inds.size());
-
-		// Find nearest neigbors
-		// #pragma omp parallel for shared(max_neighbs) schedule(dynamic, 10) num_threads(n_thread)
-		for (size_t i = 0; i < sample_inds.size(); i++)
-		{
-			nanoflann::KNNResultSet<float> resultSet(1);
-			resultSet.init(&sample_inds[i].second, &nn_dists[i]);
-			map.tree.findNeighbors(resultSet, (float*)&aligned[sample_inds[i].first], search_params);
-		}
-
-		t[2] = std::clock();
-
-
-		///////////////////////
-		// Distances metrics //
-		///////////////////////
-
-		// Erase sample_inds if dists is too big
-		vector<pair<size_t, size_t>> filtered_sample_inds;
-		filtered_sample_inds.reserve(sample_inds.size());
-		float rms2 = 0;
-		float prms2 = 0;
-		for (size_t i = 0; i < sample_inds.size(); i++)
-		{
-			if (nn_dists[i] < max_pair_d2)
-			{
-				// Check planar distance (only after a few steps for initial alignment)
-				PointXYZ diff = (map.cloud.pts[sample_inds[i].second] - aligned[sample_inds[i].first]);
-				float planar_dist = abs(diff.dot(map.normals[sample_inds[i].second]));
-				if (step < first_steps || planar_dist < max_planar_d)
-				{
-					// Keep samples
-					filtered_sample_inds.push_back(sample_inds[i]);
-
-					// Update pt2pt rms
-					rms2 += nn_dists[i];
-
-					// update pt2pl rms
-					prms2 += planar_dist;
-				}
-
-			}
-		}
-		// Compute RMS
-		results.all_rms.push_back(sqrt(rms2 / (float)filtered_sample_inds.size()));
-		results.all_plane_rms.push_back(sqrt(prms2 / (float)filtered_sample_inds.size()));
-
-		t[3] = std::clock();
-
 
 		//////////////////
 		// Optimization //
 		//////////////////
 
 		// Minimize error
-		PointToPlaneErrorMinimizer(aligned, map.cloud.pts, map.normals, map.scores, filtered_sample_inds, H_icp);
-
-		t[4] = std::clock();
-
+		vector<bool> is_ground;
+		if (params.ground_w > 0)
+		{
+			is_ground.reserve(sample_inds.size());
+			for (size_t i = 0; i < sample_inds.size(); i++)
+				is_ground.push_back(tgt_w[sample_inds[i].first] > params.ground_w);
+		}
+		PointToPlaneErrorMinimizer(aligned,
+								   map.cloud.pts,
+								   map.normals,
+								   map.scores,
+								   sample_inds,
+								   H_icp,
+								   is_ground,
+								   params.ground_z);
 
 		//////////////////////////////////////
 		// Alignment with Motion distortion //
@@ -1210,17 +1257,21 @@ void PointToMapICP(vector<PointXYZ>& tgt_pts,
 
 		// Align targets taking motion distortion into account
 		if (params.motion_distortion)
-		{
-			size_t iphi = 0;
-			for (auto& phi : phis)
-			{
-				float t = (phi - params.init_phi) / (phi1 - params.init_phi);
-				Eigen::Matrix4d phi_H = pose_interp(t, params.init_transform, results.transform, 0);
-				Eigen::Matrix3f phi_R = (phi_H.block(0, 0, 3, 3)).cast<float>();
-				Eigen::Vector3f phi_T = (phi_H.block(0, 3, 3, 1)).cast<float>();
-				aligned_mat.col(iphi) = (phi_R * targets_mat.col(iphi)) + phi_T;
-				iphi++;
-			}
+		{	
+				
+			size_t i_inds = 0;	
+			for (auto& t : tgt_t)	
+			{	
+				Eigen::Matrix4d H_rect = pose_interp(t, params.last_transform0, results.transform, 0);			
+				Eigen::Matrix3f R_rect = (H_rect.block(0, 0, 3, 3)).cast<float>();	
+				Eigen::Vector3f T_rect = (H_rect.block(0, 3, 3, 1)).cast<float>();	
+				aligned_mat.col(i_inds) = (R_rect * targets_mat.col(i_inds)) + T_rect;	
+				i_inds++;	
+			}	
+			// debug distorted	
+			// Eigen::Matrix3f R_tot = (results.transform.block(0, 0, 3, 3)).cast<float>();	
+			// Eigen::Vector3f T_tot = (results.transform.block(0, 3, 3, 1)).cast<float>();	
+			// aligned_mat_dist = (R_tot * targets_mat).colwise() + T_tot;	
 		}
 		else
 		{
@@ -1228,8 +1279,6 @@ void PointToMapICP(vector<PointXYZ>& tgt_pts,
 			Eigen::Vector3f T_tot = (results.transform.block(0, 3, 3, 1)).cast<float>();
 			aligned_mat = (R_tot * targets_mat).colwise() + T_tot;
 		}
-
-		t[5] = std::clock();
 
 
 		// Update all result matrices
@@ -1242,8 +1291,6 @@ void PointToMapICP(vector<PointXYZ>& tgt_pts,
 			temp.bottomRows(4) = Eigen::MatrixXd(results.transform);
 			results.all_transforms = temp;
 		}
-
-		t[5] = std::clock();
 
 		///////////////////////
 		// Check convergence //
@@ -1271,7 +1318,7 @@ void PointToMapICP(vector<PointXYZ>& tgt_pts,
 				mean_dR += (dR_b - mean_dR) / avg_tot;
 			}
 		}
-
+		
 		// Stop condition
 		if (!stop_cond && step > params.avg_steps)
 		{
@@ -1282,7 +1329,7 @@ void PointToMapICP(vector<PointXYZ>& tgt_pts,
 				max_it = step + params.avg_steps;
 
 				// For these last steps, reduce the max distance (half of wall thickness)
-				max_planar_d = 0.08;
+				max_planar_d = params.max_planar_dist / 2;
 			}
 		}
 
@@ -1300,77 +1347,44 @@ void PointToMapICP(vector<PointXYZ>& tgt_pts,
 		}
 
 
-		///////////// DEBUG /////////////
+		// ///////////// DEBUG /////////////
+		// if (step % 100 == 0 || step > max_it - 2)
+		// {
+		// 	string path = "/home/hth/Deep-Collison-Checker/SOGM-3D-2D-Net/results/";
+		// 	// char buffer[100];
+		// 	// sprintf(buffer, "f_%06d_step_%06d.ply", (int)count_iter, int(step));
+		// 	// string filepath = path + string(buffer);
+		// 	// save_cloud(filepath, aligned, chosen_inds);
 
-		//cout << "***********************" << endl;
-		//for (size_t i = 0; i < t.size() - 1; i++)
-		//{
-		//	double duration = 1000 * (t[i + 1] - t[i]) / (double)CLOCKS_PER_SEC;
-		//	cout << clock_str[i] << duration << " ms" << endl;
-		//}
-		//cout << " - - - - - - - - - - - - - ";
-		//for (size_t i = 0; i < t.size() - 1; i++)
-		//{
-		//	double duration = 1000 * (t[i + 1] - t[i]) / (double)CLOCKS_PER_SEC;
-		//	cout << duration << " ";
-		//}
-		//cout << endl;
-		//cout << "***********************" << endl;
+		// 	vector<PointXYZ> icp_selected;
+		// 	vector<PointXYZ> nn_selected;
+		// 	vector<float> selected_planar_dists;
+		// 	icp_selected.reserve(nn_dists.size());
+		// 	nn_selected.reserve(nn_dists.size());
+		// 	selected_planar_dists.reserve(nn_dists.size());
+		// 	for (size_t i = 0; i < sample_inds.size(); i++)
+		// 	{
+		// 		PointXYZ A = map.cloud.pts[sample_inds[i].second];
+		// 		PointXYZ B = aligned[sample_inds[i].first];
+				
+		// 		PointXYZ diff = A - B;
+		// 		float planar_dist = abs(diff.dot(map.normals[sample_inds[i].second]));
 
-		//Eigen::Matrix3f R = H.block(0, 0, 3, 3);
-		//Eigen::Vector3f T = H.block(0, 3, 3, 1);
-		//cout << "dT = " << endl << T << endl;
-		//cout << "dR = " << endl << T << endl;
+		// 		nn_selected.push_back(A);
+		// 		icp_selected.push_back(B);
+		// 		selected_planar_dists.push_back(planar_dist);
+		// 	}
 
+		// 	cout << sample_inds.size() << " = " << nn_dists.size() << endl;
+		// 	save_cloud(path + string("f_select_icp.ply"), icp_selected, nn_dists);
+		// 	save_cloud(path + string("f_select_nn.ply"), nn_selected, selected_planar_dists);
 
-		//if (step % 3 == 0)
-		//{
-		//	char buffer[100];
-		//	sprintf(buffer, "cc_aligned_%03d.ply", (int)step * 0);
-		//	save_cloud(string(buffer), aligned, phis);
-		//}
-
+		// }
+		// /////////////////////////////////
 
 	}
-
-
-	// Final regularisation for good measure
-	//for (size_t b = 0; b < B; b++)
-	//{
-	//	Eigen::Matrix4d dH = Eigen::Matrix4d::Identity(4, 4);
-	//	for (size_t bb = b; bb < b + B; bb++)
-	//	{
-	//		size_t bb_0 = bb % B;
-	//		dH = dH * results.transforms[bb_0];
-	//		cout << " " << bb_0;
-	//	}
-
-	//	cout << endl << "dH" << b << " = " << endl;
-	//	cout << dH << endl;
-	//}
-
-	//vector<float> H_w(B, 1.0f);
-	//if (true)
-	//	H_w[0] = 0;
-	//average_poses(results.transforms, H_w);
-
-	//for (size_t b = 0; b < B; b++)
-	//{
-	//	Eigen::Matrix4d dH = Eigen::Matrix4d::Identity(4, 4);
-	//	for (size_t bb = b; bb < b + B; bb++)
-	//	{
-	//		size_t bb_0 = bb % B;
-	//		dH = dH * results.transforms[bb_0];
-	//		cout << " " << bb_0;
-	//	}
-
-	//	cout << endl << "dH" << b << " = " << endl;
-	//	cout << dH << endl;
-	//}
-
-
-
-
+	
+	count_iter++;
 
 }
 
