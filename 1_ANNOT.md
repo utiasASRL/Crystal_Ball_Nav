@@ -38,6 +38,7 @@ You should have a Data folder looking like, with all zip file uncompressed:
     #   Data
     #   |---KPConv_data
     #   |---Simulation
+    #   |---Simulation_v2
     #   |---UTIn3D_A
     #   |---UTIn3D_H
 ```
