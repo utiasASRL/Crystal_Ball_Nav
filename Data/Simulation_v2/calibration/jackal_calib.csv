@@ -1,0 +1,8 @@
+header.frame_id,child_frame_id,transform.translation.x,transform.translation.y,transform.translation.z,transform.rotation.x,transform.rotation.y,transform.rotation.z,transform.rotation.w
+base_link,support_link3,0,0,0.539,0,0,0,1
+,,,,,,,,
+header.frame_id,child_frame_id,transform.translation.x,transform.translation.y,transform.translation.z,transform.rotation.x,transform.rotation.y,transform.rotation.z,transform.rotation.w
+support_link3,velodyne_base_link,0,0,0,0,0,0,1
+,,,,,,,,
+header.frame_id,child_frame_id,transform.translation.x,transform.translation.y,transform.translation.z,transform.rotation.x,transform.rotation.y,transform.rotation.z,transform.rotation.w
+velodyne_base_link,velodyne,0,0,0.0377,0,0,0,1
