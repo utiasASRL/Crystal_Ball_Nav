@@ -20,6 +20,14 @@ We provide the full implementation used in our pipeline, it contains multiple pa
 - Standard navigation system.
 - Standard navigation system with network inference.
 
+Some part of the code have their own repository and are defined as git submodules here:
+
+| Description | local path | Repository |
+| :--- | :---: | :---: |
+| PointMap (ROS node) | `Myhal_Simulator/nav_noetic_ws/src/point_slam` | [link](https://github.com/utiasASRL/point_slam) | 
+| Modified TEB (ROS node) | `Myhal_Simulator/nav_noetic_ws/src/point_slam` | [link](https://github.com/utiasASRL/teb_risk_map_planner) | 
+| Navigation system | `Myhal_Simulator/nav_noetic_ws/src/point_slam` | [link](https://github.com/utiasASRL/onboard_deep_sogm) | 
+
 Disclaimer: This is research code, it can be messy sometimes, not well optimized, and to make it work on different plateforms, it will probably require some debbugging. but it should work if you follow the intructions
 
 ## Data
