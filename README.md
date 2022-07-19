@@ -8,12 +8,28 @@ In this repository, we share the implementation of the paper [Like a Crystal Bal
 ![Intro figure](./Data/approach.png)
 
 
+## Intro
 
-In this repository, we share the implementation of the paper [Learning Spatiotemporal Occupancy Grid Maps for Lifelong Navigation in Dynamic Scenes](https://arxiv.org/abs/2108.10585). This code is a minimalist version made with two objectives:
- - Easing the reproduction of the results presented in the paper.
- - Offering the possiblity to apply the network to other datasets.
+We provide the full implementation used in our pipeline, it contains multiple parts: 
 
- As shown in the next figure, in this repo, we provide the code for our **automated annotation** and **network training**. The whole simulation is ignored, and we provide preprocessed data instead. 
+- Gazebo simualtion
+- Data processing
+- Annotation of 3D lidar point clouds.
+- Generation of SOGM.
+- Training of our network.
+- Standard navigation system.
+- Standard navigation system with network inference.
+
+Disclaimer: This is research code, it can be messy sometimes, not well optimized, and to make it work on different plateforms, it will probably require some debbugging. but it should work if you follow the intructions
+
+## Data
+
+Our real lidar dataset, UTIn3D, is available [here](https://github.com/utiasASRL/UTIn3D).
+
+The simulated data used in the paper is available in our [old repository](https://github.com/utiasASRL/Deep-Collison-Checker).
+
+
+## Usage
 
 
 
@@ -35,7 +51,7 @@ Note that the username inside the docker image is automatically copied from the 
 
 ### Step 2: Cpp wrappers 
 
-Our code uses c++ wrappers, like the original KPConv repo. They are very esay to compile. First start a docker container with:
+Our code uses c++ wrappers, like the original KPConv repo. They are very easy to compile. First start a docker container with:
 
 ```
 cd Scripts
