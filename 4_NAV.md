@@ -113,35 +113,3 @@ Now run the following commands in two different consoles:
 ```
 
 You should see perfect SOGM in RVIZ.
-
-
-
-## Run the training
-
-### Step by step
-
-1) Have a look at the training script `SOGM-3D-2D-Net/collider_plots.py`.
-2) A lot of plot utilities are defined, go directly to L2737.
-3) Here you define the list of training logs that you want to plot.
-4) At L2829, you choose what type of plot you want.
-    - `plotting = 'conv'`: plot network convergence data. 
-    - `plotting = 'PR'`: plot precision-recall curves and print scores in the console.
-    - `plotting = 'gifs'`: plot animated gifs of SOGM predictions for some selected times in the sessions. 
-5) Start the visualization:
-   ```
-   ./run_in_pytorch.sh -c "python3 collider_plots.py"
-
-
-### Some details
-
-##### For `plotting = 'conv'`:
-- Can be run at any time during the training to see if the network has converged.
-- Validation metrics are not good. YOu should use `plotting = 'PR'` for real evaluation of the results.
-
-##### For `plotting = 'PR'`:
-- Metrics are computed using 1 frame out of 100 in the dataset for faster results
-
-##### For `plotting = 'gifs'`:
-- First time you run the code, a GUI opens and you can select the moments you want to visualize as gif in all the validation sessions.
-- The code prints the selected moments in the console. To avoid aving to choose them again next time, you can copy paste them at L2765 where the logs are defined
-
