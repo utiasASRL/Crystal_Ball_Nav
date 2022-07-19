@@ -23,7 +23,7 @@ Our code uses c++ wrappers, like the original KPConv repo. They are very easy to
 
 ```
 cd Scripts
-./run_in_pytorch.sh.sh -c "./compile_wrappers.sh"
+./run_in_pytorch.sh -c "./compile_wrappers.sh"
 ```
 
 ## Data
@@ -46,11 +46,9 @@ You should have a Data folder looking like, with all zip file uncompressed:
 
 ### Step by step
 
-If you want to try the annotation process yourself, maybe modify some of the parameters, follow these steps:
-
-1) Have a look at the training script `SOGM-3D-2D-Net/train_MultiCollision.py`
-2) You can change network and training parameters in the *MultiCollisionConfig* class
-3) At L520, you can change the data that is used for training. By default the network uses UTIn3D_A + UTIn3D_H + Simulation
+1) Have a look at the training script `SOGM-3D-2D-Net/train_MultiCollision.py`.
+2) You can change network and training parameters in the *MultiCollisionConfig* class.
+3) At L520, you can change the data that is used for training. By default the network uses UTIn3D_A + UTIn3D_H + Simulation.
 4) At L123, you can change the proportion of simulated data used by the network (last value in the list).
 5) Start the training:
    ```
@@ -60,7 +58,7 @@ If you want to try the annotation process yourself, maybe modify some of the par
    ```
    ./run_in_pytorch.sh -d -c "python3 train_MultiCollision.py"
    ```
-6) Network model and results are saved in a dated folder `SOGM-3D-2D-Net/results/Log_YYYY-MM-DD_HH-MM-SS`
+6) Network model and results are saved in a dated folder `SOGM-3D-2D-Net/results/Log_YYYY-MM-DD_HH-MM-SS`.
 
 ### Some details
 

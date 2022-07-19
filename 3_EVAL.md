@@ -1,5 +1,5 @@
 
-# Train our network on annotated data
+# Evaluate/Visualize the network results
 
 ## Setup 
 
@@ -23,7 +23,7 @@ Our code uses c++ wrappers, like the original KPConv repo. They are very easy to
 
 ```
 cd Scripts
-./run_in_pytorch.sh.sh -c "./compile_wrappers.sh"
+./run_in_pytorch.sh -c "./compile_wrappers.sh"
 ```
 
 ## Data
@@ -46,46 +46,28 @@ You should have a Data folder looking like, with all zip file uncompressed:
 
 ### Step by step
 
-If you want to try the annotation process yourself, maybe modify some of the parameters, follow these steps:
+1) Have a look at the training script `SOGM-3D-2D-Net/collider_plots.py`.
+2) A lot of plot utilities are defined, go directly to L2737.
+3) Here you define the list of training logs that you want to plot.
+4) At L2829, you choose what type of plot you want.
+    - `plotting = 'conv'`: plot network convergence data. 
+    - `plotting = 'PR'`: plot precision-recall curves and print scores in the console.
+    - `plotting = 'gifs'`: plot animated gifs of SOGM predictions for some selected times in the sessions. 
+5) Start the visualization:
+   ```
+   ./run_in_pytorch.sh -c "python3 collider_plots.py"
 
-1) Have a look at the training script `SOGM-3D-2D-Net/train_MultiCollision.py`
-2) You can change network and training parameters in the *MultiCollisionConfig* class
-3) At L520, you can change the data that is used for training. By default the network uses UTIn3D_A + UTIn3D_H + Simulation
-4) At L123, you can change the proportion of simulated data used by the network (last value in the list).
-5) Start the training:
-   ```
-   ./run_in_pytorch.sh -c "python3 train_MultiCollision.py"
-   ```
-   Or with -d for detached mode:
-   ```
-   ./run_in_pytorch.sh -d -c "python3 train_MultiCollision.py"
-   ```
-6) Network model and results are saved in a dated folder `SOGM-3D-2D-Net/results/Log_YYYY-MM-DD_HH-MM-SS`
 
 ### Some details
 
-The script `./run_in_pytorch.sh -c "XXXXXXXXX"` runs a command `XXXXXXXXX` from inside the `SOGM-3D-2D-Net` folder.
+##### For `plotting = 'conv'`:
+- Can be run at any time during the training to see if the network has converged.
+- Validation metrics are not good. YOu should use `plotting = 'PR'` for real evaluation of the results.
 
-You can also add the argument -d to run the container in detach mode (very practical for annotation and training which are both very long).
+##### For `plotting = 'PR'`:
+- Metrics are computed using 1 frame out of 100 in the dataset for faster results
 
-
-## Going further: building a dev environment using Docker and VSCode
-
-We provide a simple way to develop over our code using Docker and VSCode. First start a docker container specifically for development:
-
-```
-cd Scripts
-./run_in_pytorch.sh -dv
-```
-
-Then then attach visual studio code to this container named `dev-SOGM`. For this you need to install the docker extension, then go to the list of docker containers running, right click on `dev-SOGM`, and `attach visual studio code`.
-
-You can even do it over shh by forwarding the right port. Execute the following commands (On windows, it can be done using MobaXterm local terminal):
-
-```
-set DOCKER_HOST="tcp://localhost:23751"
-ssh -i "path_to_your_ssh_key" -NL localhost:23751:/var/run/docker.sock  user@your_domain_or_ip
-```
-
-The list of docker running on your remote server should appear in the list of your local VSCode. You will need the extensions `Remote-SSH` and `Remote-Containers`.
+##### For `plotting = 'gifs'`:
+- First time you run the code, a GUI opens and you can select the moments you want to visualize as gif in all the validation sessions.
+- The code prints the selected moments in the console. To avoid aving to choose them again next time, you can copy paste them at L2765 where the logs are defined
 

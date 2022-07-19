@@ -6,6 +6,7 @@ Data/*
 !Data/KPConv_data
 Data/KPConv_data/*
 !Data/KPConv_data/myhal_sym.yaml
+!Data/Simulation_v2/jackal_calib.csv
 
 SOGM-3D-2D-Net/cpp_wrappers/g2o
 SOGM-3D-2D-Net/cpp_wrappers/ceres-solver-2.0.0

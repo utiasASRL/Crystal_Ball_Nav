@@ -23,7 +23,7 @@ Our code uses c++ wrappers, like the original KPConv repo. They are very easy to
 
 ```
 cd Scripts
-./run_in_pytorch.sh.sh -c "./compile_wrappers.sh"
+./run_in_pytorch.sh -c "./compile_wrappers.sh"
 ```
 
 ## Data
@@ -48,7 +48,7 @@ You should have a Data folder looking like, with all zip file uncompressed:
 
 If you want to try the annotation process yourself, maybe modify some of the parameters, follow these steps:
 
-1) Have a look at the dataset sessions defined in `SOGM-3D-2D-Net/MyhalCollision_sessions.py`
+1) Have a look at the dataset sessions defined in `SOGM-3D-2D-Net/MyhalCollision_sessions.py`.
 2) Have a look at the file `SOGM-3D-2D-Net/annotate_MyhalCollision.py` where the annotation is started.
 3) Start the python file:
    ```
@@ -64,7 +64,7 @@ If you want to try the annotation process yourself, maybe modify some of the par
     Data/UTIn3D_H/annotation
     Data/UTIn3D_H/collisions
     ```
-6) Have a look at the functions 
+6) Have a look at the functions:
     - *annotation_process* (`SOGM-3D-2D-Net/slam/PointMapSLAM.py` L1893) 
     - *collision_annotation* (`SOGM-3D-2D-Net/datasets/MyhalCollision.py` L2550) 
 
@@ -73,7 +73,7 @@ If you want to try the annotation process yourself, maybe modify some of the par
    ```
    ./run_in_pytorch.sh -c "python3 annotate_MyhalCollision.py"
    ```
-The annotation process takes quite some time. Annotated point clouds are saved in the folder `Data/UTIn3D_H/annotation`
+The annotation process takes quite some time. Annotated point clouds are saved in the folder `Data/UTIn3D_H/annotation`.
 
 ### Some details
 
