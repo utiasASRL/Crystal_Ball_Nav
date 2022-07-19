@@ -22,13 +22,13 @@ We provide the full implementation used in our pipeline, it contains multiple pa
 
 Some part of the code have their own repository and are defined as git submodules here:
 
-| Description | local path | Repository |
-| :--- | :---: | :---: |
+| Description | Local path | Repository |
+| :--- | :--- | :---: |
 | PointMap (ROS node) | `Myhal_Simulator/nav_noetic_ws/src/point_slam` | [link](https://github.com/utiasASRL/point_slam) | 
 | Modified TEB (ROS node) | `Myhal_Simulator/nav_noetic_ws/src/teb_local_planner` | [link](https://github.com/utiasASRL/teb_risk_map_planner) | 
 | Navigation system | `Myhal_Simulator/onboard_deep_sogm` | [link](https://github.com/utiasASRL/onboard_deep_sogm) | 
 
-Disclaimer: This is research code, it can be messy sometimes, not well optimized, and to make it work on different plateforms, it will probably require some debbugging. but it should work if you follow the intructions
+Disclaimer: This is research code, it can sometimes be messy and not well optimized. To make it work on different plateforms, it will probably require some debbugging.
 
 ## Data
 
@@ -41,10 +41,10 @@ The simulated data used in the paper is available in our [old repository](https:
 
 This is a large repository, that can do mutliple things. We provide short guides for each specific tasks:
 
-- Task #1: [Annotate real lidar point clouds and generate SOGMs](./1_ANNOT.md)
-- Task #2: [Train our network on annotated data](./2_TRAIN.md)
-- Task #3: [Evaluate/Visualize the network results](./3_EVAL.md)
-- Task #4: [Run navigation in the simulation with and without SOGMs](./4_NAV.md)
+##### Task #1: [Annotate real lidar point clouds and generate SOGMs](./1_ANNOT.md)
+##### Task #2: [Train our network on annotated data](./2_TRAIN.md)
+##### Task #3: [Evaluate/Visualize the network results](./3_EVAL.md)
+##### Task #4: [Run navigation in the simulation with and without SOGMs](./4_NAV.md)
 
 
 ## References
