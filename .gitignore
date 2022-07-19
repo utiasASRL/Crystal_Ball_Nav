@@ -27,6 +27,7 @@ core
 
 **/desktop.ini
 git_login.sh
+**/build
 **/build/**
 /src/collision_trainer/results
 /src/collision_trainer/core
