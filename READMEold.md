@@ -117,28 +117,6 @@ cd Scripts
 
 You can also add the argument -d to run the container in detach mode (very practical as the training lasts several hours).
 
-
-## Building a dev environment using Docker and VSCode
-
-We provide a simple way to develop over our code using Docker and VSCode. First start a docker container specifically for development:
-
-```
-cd Scripts
-./dev_noetic.sh -d
-```
-
-Then then attach visual studio code to this container named `$USER-noetic_pytorch-dev`. For this you need to install the docker extension, then go to the list of docker containers running, right click on `$USER-noetic_pytorch-dev`, and `attach visual studio code`.
-
-You can even do it over shh by forwarding the right port. Execute the following commands (On windows, it can be done using MobaXterm local terminal):
-
-```
-set DOCKER_HOST="tcp://localhost:23751"
-ssh -i "path_to_your_ssh_key" -NL localhost:23751:/var/run/docker.sock  user@your_domain_or_ip
-```
-
-The list of docker running on your remote server should appear in the list of your local VSCode. YOu will probably need the extensions `Remote-SSH` and `Remote-Containers`.
-
-
 ## Going further
 
 If you are interested in using this code with our simulator, you can go to the two following repositories:
