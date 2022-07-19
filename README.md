@@ -41,10 +41,10 @@ The simulated data used in the paper is available in our [old repository](https:
 
 This is a large repository, that can do mutliple things. We provide short guides for each specific tasks:
 
-##### Task #1: [Annotate real lidar point clouds and generate SOGMs](./1_ANNOT.md)
-##### Task #2: [Train our network on annotated data](./2_TRAIN.md)
-##### Task #3: [Evaluate/Visualize the network results](./3_EVAL.md)
-##### Task #4: [Run navigation in the simulation with and without SOGMs](./4_NAV.md)
+- **Task #1:** [Annotate real lidar point clouds and generate SOGMs](./1_ANNOT.md)
+- **Task #2:** [Train our network on annotated data](./2_TRAIN.md)
+- **Task #3:** [Evaluate/Visualize the network results](./3_EVAL.md)
+- **Task #4:** [Run navigation in the simulation with and without SOGMs](./4_NAV.md)
 
 
 ## References
