@@ -103,25 +103,16 @@ N.B. `-b -m 2` should always remain. `-i`, `-l`, `-g`, and `-s` ar incompatible,
 
 Run a first simulation with the previous commands. Wait until the end. A dated folder `YYYY-MM-DD_HH-MM-SS` is created in `Data/Simulation_v2/simulated_runs` to save your simulation world and data.
 
-
-
-
-
-
+Now run the following commands in two different consoles:
 
 ```
-./run_in_melodic.sh -c "./simu_master.sh -vr -t 2022-A -p Flow2_params"
-./run_in_melodic.sh -c "./simu_master.sh -fgvr -t 2022-A -p Flow2_params"
 ./run_in_melodic.sh -c "./simu_master.sh -rfg -t 2022-A -p Flow2_params -l 2022-05-18-22-22-02"
 ```
-
-In a second console start the robot navigation with 
-
 ```
-./run_in_foxy.sh -c "./nav_master.sh -b -m 2"
-./run_in_foxy.sh -c "./nav_master.sh -bs -m 2"
-./run_in_foxy.sh -c "./nav_master.sh -bl -m 2"
+./run_in_foxy.sh -c "./nav_master.sh -bg -m 2"
 ```
+
+You should see perfect SOGM in RVIZ.
 
 
 
