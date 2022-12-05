@@ -2,17 +2,17 @@
 #FROM vistart/cuda:10.1-cudnn7-runtime-ubuntu20.04
 FROM nvcr.io/nvidia/cudagl:11.0-devel-ubuntu20.04
 
+# Setup environment
+RUN apt-get update
+RUN apt-get upgrade -y --no-install-recommends
+RUN DEBIAN_FRONTEND=noninteractive
+
 # Setup timezone
 RUN echo 'Etc/UTC' > /etc/timezone && \
     ln -s /usr/share/zoneinfo/Etc/UTC /etc/localtime && \
     apt-get update && \
     apt-get install -q -y --no-install-recommends tzdata && \
     rm -rf /var/lib/apt/lists/*
-
-# Setup environment
-RUN apt-get update
-RUN apt-get upgrade -y --no-install-recommends
-RUN DEBIAN_FRONTEND=noninteractive
 
 # Install preliminary packages
 RUN apt-get update

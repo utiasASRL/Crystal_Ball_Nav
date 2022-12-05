@@ -338,7 +338,7 @@ void PointMapSLAM::add_new_frame(vector<PointXYZ> &f_pts,
 	if (count_inliers < params.icp_params.n_samples)
 	{
 		cout << "ERROR: at frame " << frame_i << ", Not enough inliers for ICP" << endl;
-		string path000 = "/home/hth/Deep-Collison-Checker/SOGM-3D-2D-Net/results/";
+		string path000 = "/home/polus/Deep-Collison-Checker/SOGM-3D-2D-Net/results/";
 		char buffer00[100];
 		char buffer02[100];
 		sprintf(buffer00, "no_inliers_%05d_map.ply", int(frame_i));
@@ -498,7 +498,7 @@ void PointMapSLAM::add_new_frame(vector<PointXYZ> &f_pts,
 					cout << "ERROR: at frame " << frame_i << ", ICP not converging, num_iter = " << icp_results.all_plane_rms.size() << endl;
 
 					// Debug (Points with scores)
-					string path000 = "/home/hth/Deep-Collison-Checker/SOGM-3D-2D-Net/results/";
+					string path000 = "/home/polus/Deep-Collison-Checker/SOGM-3D-2D-Net/results/";
 					char buffer00[100];
 					char buffer01[100];
 					char buffer02[100];
@@ -562,7 +562,7 @@ void PointMapSLAM::add_new_frame(vector<PointXYZ> &f_pts,
 	bool saving_rms = true;
 	if (saving_rms)
 	{
-		string rms_path = "/home/hth/Deep-Collison-Checker/SOGM-3D-2D-Net/results/all_rms.txt";
+		string rms_path = "/home/polus/Deep-Collison-Checker/SOGM-3D-2D-Net/results/all_rms.txt";
 		std::fstream outfile;
 		if (frame_i < 1)
 			outfile.open(rms_path, std::fstream::out);
@@ -616,7 +616,7 @@ void PointMapSLAM::add_new_frame(vector<PointXYZ> &f_pts,
 	
 	if (warning)
 	{
-		string path000 = "/home/hth/Deep-Collison-Checker/SOGM-3D-2D-Net/results/";
+		string path000 = "/home/polus/Deep-Collison-Checker/SOGM-3D-2D-Net/results/";
 		char buffer02[100];
 		sprintf(buffer02, "f_%05d_%03d-iter_last.ply", int(frame_i), (int)icp_results.all_plane_rms.size());
 		string filepath02 = path000 + string(buffer02);
@@ -689,7 +689,7 @@ void PointMapSLAM::add_new_frame(vector<PointXYZ> &f_pts,
 	bool saving_timings = true;
 	if (saving_timings)
 	{
-		string t_path = "/home/hth/Deep-Collison-Checker/SOGM-3D-2D-Net/results/all_timings.txt";
+		string t_path = "/home/polus/Deep-Collison-Checker/SOGM-3D-2D-Net/results/all_timings.txt";
 		std::fstream outfile;
 		if (frame_i < 2)
 		{
@@ -1230,7 +1230,7 @@ Eigen::MatrixXd call_on_real_sequence(string& frame_names,
 		{
 			cout << "\n  >>> Loop detected. Performing closure" << endl;
 
-			string path000 = "/home/hth/Deep-Collison-Checker/SOGM-3D-2D-Net/results/";
+			string path000 = "/home/polus/Deep-Collison-Checker/SOGM-3D-2D-Net/results/";
 			char buffer00[100];
 			sprintf(buffer00, "f_%05d_map_before.ply", int(frame_ind));
 			vector<float> all_features(mapper.map.oldest.begin(), mapper.map.oldest.end());

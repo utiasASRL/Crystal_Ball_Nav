@@ -22,10 +22,7 @@
 #
 
 # Common libs
-from re import S
-from turtle import Turtle
 import numpy as np
-from pandas import options
 from utils.ply import read_ply, write_ply
 
 #from mayavi import mlab

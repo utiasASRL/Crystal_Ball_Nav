@@ -45,7 +45,7 @@ fi
 
 # Volumes (modify with your own path here)
 volumes="-v $PWD/..:/home/$USER/Deep-Collison-Checker \
--v $PWD/../../2-Deep-Collision-Checker/Simulation_Data:/home/$USER/Deep-Collison-Checker/Data/Simulation"
+    -v $HOME/.ssh:/home/$USER/.ssh"
 
 # Additional arguments to be able to open GUI
 XSOCK=/tmp/.X11-unix
@@ -92,7 +92,7 @@ else
     $volumes \
     $other_args \
     --name "$USER-SOGM-$now" \
-    noetic_pytorch_$USER \
+    annot_$USER  \
     $command
 
     # Attach a log parameters and log the detached docker

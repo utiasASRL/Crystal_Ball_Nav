@@ -1841,7 +1841,8 @@ class MyhalCollisionSlam:
         if exists(map_lim_file):
             map_limits = np.loadtxt(map_lim_file)
         else:
-            map_limits = None
+            print('\n\nWARNING: NO map limits provided\n\n')
+            map_limits = np.array([[-1e9, 1e9], [-1e9, 1e9], [-1e9, 1e9]])
 
         lim_box = Box(map_limits[0, 0], map_limits[1, 0], map_limits[0, 1], map_limits[1, 1])
         min_z = map_limits[2, 0]
@@ -1867,6 +1868,14 @@ class MyhalCollisionSlam:
 
         else:
 
+
+            print('\n')
+
+            print(frame_names[:3])
+            print(map_t[:3])
+            print(map_folder)
+            print('\n')
+
             map_H = slam_on_real_sequence(frame_names,
                                           map_t,
                                           map_folder,
@@ -1879,9 +1888,10 @@ class MyhalCollisionSlam:
                                           icp_samples=600,
                                           icp_pairing_dist=2.0,
                                           icp_planar_dist=0.12,
-                                          icp_max_iter=100,
+                                          icp_max_iter=500,
                                           icp_avg_steps=5,
                                           saving_for_loop_closure=True)
+
 
             # Save the trajectory
             save_trajectory(join(map_folder, 'map0_traj_{:s}.ply'.format(self.map_day)), map_H)
@@ -1894,6 +1904,9 @@ class MyhalCollisionSlam:
             os.rename(old_name, new_name)
 
             print('\n    > Done')
+
+        
+        a = 1/0
 
         ######################
         # Loop closure utility

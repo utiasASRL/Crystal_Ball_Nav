@@ -254,3 +254,87 @@ def UTIn3D_H_sessions():
     #       > TODO Install PyVista and use it instead of open3d for videos because it has EDL
     #
     return dataset_path, map_day, refine_sessions, train_sessions, train_comments
+
+
+def UTIn3D_H_sessions():
+
+    # Mapping sessions
+    # ****************Data/Real/rosbags/2022-12-05_14-53-24.bag
+
+    dataset_path = '../Data/Apple1'
+    sessions_and_comments = [['2022-12-05_15-06-25', ''],  # - Mapping1
+                             ['2022-12-02_17-29-53', ''],  # - Mapping1
+                             ['2022-12-02_17-35-06', '']]  # - Mapping2
+
+                             
+
+    # Actual sessions for training
+    # ****************************
+
+    # The list contains tuple (name, comments), so that we do not reinspect things we already did
+
+    # # Tuesday 4pm
+    # sessions_and_comments += [['2022-03-08_21-02-28', 'ff1 train >    Good    (lots of people moving)'],
+    #                           ['2022-03-08_21-08-04', 'ff1 train >   Medium   (Some people just not moving)']]
+                              
+
+    # Procesing
+    # *********
+    
+    sessions_and_comments = [(s, c) for s, c in sessions_and_comments if 'ERASED' not in c]
+
+    sessions = [s_c[0] for s_c in sessions_and_comments]
+    comments = [s_c[1] for s_c in sessions_and_comments]
+
+    map_i = 0
+    refine_i = np.arange(len(sessions))[1:2]
+    train_i = np.arange(len(sessions))[1:]
+
+    map_day = sessions[map_i]
+    refine_sessions = np.array(sessions)[refine_i]
+    train_sessions = np.array(sessions)[train_i]
+    train_comments = np.array(comments)[train_i]
+
+    train_order = np.argsort(train_sessions)
+    train_sessions = train_sessions[train_order]
+    train_comments = train_comments[train_order]
+
+    # Instuctions to add new data
+    # ---------------------------
+    #
+    #   1. place rosbag is the rosbag folder **Data/Real/rosbags**
+    #
+    #   2. Process them:
+    #       > `./run_in_pytorch.sh -c "./process_rosbags.sh"`
+    #
+    #   3. Add their name to the session list (use empty model below)
+    #
+    #        sessions_and_comments += [['XXXXXXXXXXXXXXXXXXX', 'ff1 train >    Good    ()'],
+    #                                  ['XXXXXXXXXXXXXXXXXXX', 'ff1 train >    Good    ()'],
+    #                                  ['XXXXXXXXXXXXXXXXXXX', 'ff1 train >    Good    ()']]
+    #
+    #   4. Start annotation:
+    #       > `./run_in_pytorch.sh -d -c "python3 annotate_MyhalCollision.py"` (in detach mode)
+    #
+    #   5. When finished inspect each run by reruning the annotation script:
+    #       > `./run_in_pytorch.sh -c "python3 annotate_MyhalCollision.py"`
+    #
+    #   6. During inspection, add comment and feel free to create video with hotkey *g*
+    #
+    #   7. When finished, delete runs you did not like with the runs_to_erase variable
+    #
+    #   8. Delete the rosbags in their folders
+    #
+    #   9. Add train or val word in the comment (before >) for the training
+    #
+    #   10. You can now start training:
+    #       > `./run_in_pytorch.sh -c "python3 train_MyhalCollision.py"`
+    #
+
+    # TODO: Other
+    #       > sur Idefix, larger global map extension radius, higher refresh rate, and use classified frame for global map
+    #       > TEB convergence speed is not very fast... Maybe work on this
+    #
+    #       > TODO Install PyVista and use it instead of open3d for videos because it has EDL
+    #
+    return dataset_path, map_day, refine_sessions, train_sessions, train_comments

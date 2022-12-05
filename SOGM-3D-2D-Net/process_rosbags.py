@@ -82,6 +82,8 @@ def main(save_velo=True,
             run_path = '../Data/UTIn3D_H/runs'
         elif (file >= '2022-05-20_11-46-11.bag' and file <= '2022-06-05_13-04-19.bag'):
             run_path = '../Data/UTIn3D_A/runs'
+        elif (file >= '2022-12-02_17-29-53.bag' and file <= '2023-12-02_17-29-53.bag'):
+            run_path = '../Data/Apple1/runs'
         elif (file == '2021-12-05_18-04-51.bag'):
             run_path = '../Data/RealAlbany/runs'
         elif (file == 'only-map.bag'):
