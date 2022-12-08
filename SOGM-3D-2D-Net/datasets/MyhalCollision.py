@@ -1869,13 +1869,6 @@ class MyhalCollisionSlam:
         else:
 
 
-            print('\n')
-
-            print(frame_names[:3])
-            print(map_t[:3])
-            print(map_folder)
-            print('\n')
-
             map_H = slam_on_real_sequence(frame_names,
                                           map_t,
                                           map_folder,
@@ -1904,9 +1897,6 @@ class MyhalCollisionSlam:
             os.rename(old_name, new_name)
 
             print('\n    > Done')
-
-        
-        a = 1/0
 
         ######################
         # Loop closure utility
@@ -2493,6 +2483,8 @@ class MyhalCollisionSlam:
             all_movables_probs.append(movable_prob)
 
 
+        print([aaa.shape for aaa in all_movables_probs])
+
         # Combine movable probs from days
         all_movables_probs = np.stack(all_movables_probs, 0)
         all_movables_probs = np.max(all_movables_probs, axis=0)
@@ -2515,7 +2507,7 @@ class MyhalCollisionSlam:
                                           remove_dist=0.24)
 
         # Remove movable except on ground
-        still_mask = np.logical_and(all_movables_probs > -0.1, all_movables_probs < occup_threshold)
+        still_mask = all_movables_probs < occup_threshold
         still_mask = np.logical_or(still_mask, ground_mask)
         still_mask = np.logical_and(still_mask, map_points[:, 0] > lim_box.x1)
         still_mask = np.logical_and(still_mask, map_points[:, 0] < lim_box.x2)
@@ -2534,7 +2526,7 @@ class MyhalCollisionSlam:
                                           remove_dist=0.24)
 
         # This time remove map_points with the refined ground
-        still_mask = np.logical_and(all_movables_probs > -0.1, all_movables_probs < occup_threshold)
+        still_mask = all_movables_probs < occup_threshold
         still_mask = np.logical_or(still_mask, ground_mask)
         map_points = map_points[still_mask]
         map_normals = map_normals[still_mask]

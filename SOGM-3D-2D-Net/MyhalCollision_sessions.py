@@ -263,8 +263,9 @@ def UTIn3D_H_sessions():
 
     dataset_path = '../Data/Apple1'
     sessions_and_comments = [['2022-12-05_15-06-25', ''],  # - Mapping1
-                             ['2022-12-02_17-29-53', ''],  # - Mapping1
-                             ['2022-12-02_17-35-06', '']]  # - Mapping2
+                             ['2022-12-05_16-23-54', ''],  # - Mapping1
+                             ['2022-12-05_16-47-02', ''],  # - Mapping2
+                             ['2022-12-05_17-02-23', '']]  # - Mapping3
 
                              
 
@@ -287,7 +288,7 @@ def UTIn3D_H_sessions():
     comments = [s_c[1] for s_c in sessions_and_comments]
 
     map_i = 0
-    refine_i = np.arange(len(sessions))[1:2]
+    refine_i = np.arange(len(sessions))[1:4]
     train_i = np.arange(len(sessions))[1:]
 
     map_day = sessions[map_i]
