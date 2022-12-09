@@ -256,7 +256,7 @@ def UTIn3D_H_sessions():
     return dataset_path, map_day, refine_sessions, train_sessions, train_comments
 
 
-def UTIn3D_H_sessions():
+def Apple_sessions():
 
     # Mapping sessions
     # ****************Data/Real/rosbags/2022-12-05_14-53-24.bag
