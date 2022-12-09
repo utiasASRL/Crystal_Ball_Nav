@@ -1,6 +1,6 @@
 #FROM osrf/ros:noetic-desktop-full
 #FROM vistart/cuda:10.1-cudnn7-runtime-ubuntu20.04
-FROM nvcr.io/nvidia/cudagl:11.0-devel-ubuntu20.04
+FROM nvcr.io/nvidia/cudagl:11.3.0-devel-ubuntu20.04
 
 # Setup environment
 RUN apt-get update
@@ -113,19 +113,20 @@ RUN pip3 install pynvml
 
 # RUN apt-get install libnvidia-gl-430:i386
 
-# Install Mayavi from source
-#RUN pip3 install --upgrade PyQt5
-WORKDIR /workspace/compiled_libs
-RUN git clone --recursive --progress https://github.com/enthought/mayavi.git
-WORKDIR /workspace/compiled_libs/mayavi
-RUN pip3 install -r requirements.txt
-RUN python3 setup.py install 
+# # Install Mayavi from source
+# #RUN pip3 install --upgrade PyQt5
+# WORKDIR /workspace/compiled_libs
+# RUN git clone --recursive --progress https://github.com/enthought/mayavi.git
+# WORKDIR /workspace/compiled_libs/mayavi
+# RUN pip3 install -r requirements.txt
+# RUN python3 setup.py install 
 
 # Install mayavi and QT
 #RUN apt-get install pyqt5-dev-tools pyqt5-dev -y --no-install-recommends
 
 RUN pip3 install open3d
 RUN pip3 install autopep8 flake8
+RUN pip3 install pyvista
 
 # RUN export QT_PLUGIN_PATH=/usr/lib/qt/plugins
 # RUN echo "export QT_PLUGIN_PATH=/usr/lib/qt/plugins" >> ~/.bashrc
