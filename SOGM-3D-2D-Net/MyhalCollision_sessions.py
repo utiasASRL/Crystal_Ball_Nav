@@ -23,7 +23,7 @@ def UTIn3D_A_sessions():
 
     # Mapping sessions
     # ****************
-    
+
     # Notes for myself: number of dynamic people emcoutered in each run
     #
     # '2021-12-10_12-53-37',    1 driver / 3 people
@@ -87,7 +87,7 @@ def UTIn3D_A_sessions():
                               ['2022-05-31_16-35-32', ' train > '],     #
                               ['2022-05-31_16-38-34', ' train > '],     #
                               ['2022-05-31_18-33-02', ' train > '],     # Conference collected data
-                              ['2022-05-31_19-34-18', '  val  > '],     # 
+                              ['2022-05-31_19-34-18', '  val  > '],     #
                               ['2022-05-31_19-37-08', ' train > '],     #
                               ['2022-05-31_19-40-52', '  val  > '],     #
                               ['2022-05-31_19-44-52', ' train > '],     #
@@ -100,9 +100,8 @@ def UTIn3D_A_sessions():
     #                           ['2022-06-01_18-15-07', '  val  > Controlled comparison:  AI-CRV-4 / TEB  ( ok )'],   #
     #                           ['2022-06-01_18-20-40', '  val  > Controlled comparison:  AI-CRV-4 / SOGM ( ok )'],   # Controlled comparison
     #                           ['2022-06-01_18-23-28', '  val  > Controlled comparison:  AI-CRV-4 / TEB  ( ok )'],   # Conference collected data
-    #                           ['2022-06-01_20-36-03', '  val  > Controlled comparison:  AI-CRV-4 / no_t ( ok )'],   # 
+    #                           ['2022-06-01_20-36-03', '  val  > Controlled comparison:  AI-CRV-4 / no_t ( ok )'],   #
     #                           ['2022-06-01_20-42-11', '  val  > Controlled comparison:  AI-CRV-4 / no_t ( ok )']]   #
-
 
     sessions = [s_c[0] for s_c in sessions_and_comments]
     comments = [s_c[1] for s_c in sessions_and_comments]
@@ -192,11 +191,10 @@ def UTIn3D_H_sessions():
                               ['2022-04-01_15-01-18', 'ff1 train >    Good    (Mega crowd)'],
                               ['2022-04-01_15-06-55', 'ff1  val  >    Good    (Mega crowd)'],
                               ['2022-04-01_15-11-29', 'ff1  val  >    Good    (Many people)']]
-                              
 
     # Procesing
     # *********
-    
+
     sessions_and_comments = [(s, c) for s, c in sessions_and_comments if 'ERASED' not in c]
 
     sessions = [s_c[0] for s_c in sessions_and_comments]
@@ -267,22 +265,19 @@ def Apple_sessions():
                              ['2022-12-05_16-47-02', ''],  # - Mapping2
                              ['2022-12-05_17-02-23', '']]  # - Mapping3
 
-
-sessions_and_comments += [['2022-12-02_17-29-53', ''],
-['2022-12-02_17-35-06', ''],
-['2022-12-05_15-06-25', ''],
-['2022-12-05_16-23-54', ''],
-['2022-12-05_16-47-02', ''],
-['2022-12-05_17-02-23', ''],
-['2022-12-05_17-39-46', ''],
-['2022-12-07_15-24-56', ''],
-['2022-12-07_15-28-04', ''],
-['2022-12-07_15-36-58', ''],
-['2022-12-07_15-40-41', ''],
-['2022-12-07_15-43-46', ''],
-['2022-12-07_15-49-48.bag']]
-
-                             
+    sessions_and_comments += [['2022-12-02_17-29-53', ''],
+                              ['2022-12-02_17-35-06', ''],
+                              ['2022-12-05_15-06-25', ''],
+                              ['2022-12-05_16-23-54', ''],
+                              ['2022-12-05_16-47-02', ''],
+                              ['2022-12-05_17-02-23', ''],
+                              ['2022-12-05_17-39-46', ''],
+                              ['2022-12-07_15-24-56', ''],
+                              ['2022-12-07_15-28-04', ''],
+                              ['2022-12-07_15-36-58', ''],
+                              ['2022-12-07_15-40-41', ''],
+                              ['2022-12-07_15-43-46', ''],
+                              ['2022-12-07_15-49-48.bag']]
 
     # Actual sessions for training
     # ****************************
@@ -292,11 +287,10 @@ sessions_and_comments += [['2022-12-02_17-29-53', ''],
     # Tuesday 4pm
     sessions_and_comments += [['2022-03-08_21-02-28', 'ff1 train >    Good    (lots of people moving)'],
                               ['2022-03-08_21-08-04', 'ff1 train >   Medium   (Some people just not moving)']]
-                              
 
     # Procesing
     # *********
-    
+
     sessions_and_comments = [(s, c) for s, c in sessions_and_comments if 'ERASED' not in c]
 
     sessions = [s_c[0] for s_c in sessions_and_comments]
