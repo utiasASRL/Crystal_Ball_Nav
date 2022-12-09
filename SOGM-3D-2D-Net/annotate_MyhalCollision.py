@@ -137,7 +137,6 @@ if __name__ == '__main__':
     # Choose sessions
     # ***************
 
-
     # Sessions from Myhal fifth floor
     # dataset_path, map_day, refine_sessions, train_sessions, train_comments = UTIn3D_A_sessions()
 
