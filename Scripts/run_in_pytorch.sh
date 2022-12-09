@@ -92,7 +92,7 @@ else
     $volumes \
     $other_args \
     --name "$USER-SOGM-$now" \
-    annot_$USER  \
+    noetic_pytorch_$USER  \
     $command
 
     # Attach a log parameters and log the detached docker

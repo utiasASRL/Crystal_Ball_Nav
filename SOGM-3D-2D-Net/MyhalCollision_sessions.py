@@ -267,6 +267,21 @@ def Apple_sessions():
                              ['2022-12-05_16-47-02', ''],  # - Mapping2
                              ['2022-12-05_17-02-23', '']]  # - Mapping3
 
+
+sessions_and_comments += [['2022-12-02_17-29-53', ''],
+['2022-12-02_17-35-06', ''],
+['2022-12-05_15-06-25', ''],
+['2022-12-05_16-23-54', ''],
+['2022-12-05_16-47-02', ''],
+['2022-12-05_17-02-23', ''],
+['2022-12-05_17-39-46', ''],
+['2022-12-07_15-24-56', ''],
+['2022-12-07_15-28-04', ''],
+['2022-12-07_15-36-58', ''],
+['2022-12-07_15-40-41', ''],
+['2022-12-07_15-43-46', ''],
+['2022-12-07_15-49-48.bag']]
+
                              
 
     # Actual sessions for training
@@ -274,9 +289,9 @@ def Apple_sessions():
 
     # The list contains tuple (name, comments), so that we do not reinspect things we already did
 
-    # # Tuesday 4pm
-    # sessions_and_comments += [['2022-03-08_21-02-28', 'ff1 train >    Good    (lots of people moving)'],
-    #                           ['2022-03-08_21-08-04', 'ff1 train >   Medium   (Some people just not moving)']]
+    # Tuesday 4pm
+    sessions_and_comments += [['2022-03-08_21-02-28', 'ff1 train >    Good    (lots of people moving)'],
+                              ['2022-03-08_21-08-04', 'ff1 train >   Medium   (Some people just not moving)']]
                               
 
     # Procesing

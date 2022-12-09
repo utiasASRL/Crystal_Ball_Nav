@@ -160,7 +160,7 @@ RUN make install
 # Other pip install
 RUN pip3 install pyvista
 RUN pip3 install --upgrade gdown
-
+RUN apt-get install rsync -y --no-install-recommends
 
 # Setup user information
 ARG username0=bag
