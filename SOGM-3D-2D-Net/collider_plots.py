@@ -2916,7 +2916,6 @@ if __name__ == '__main__':
 
     #   3. other metric idea: get local maxima of predictions, and cmpute distance to cosest groundtruth pixel
 
-
     ##################################################
     # Step 2: Choose which results you want to compare
     ##################################################
