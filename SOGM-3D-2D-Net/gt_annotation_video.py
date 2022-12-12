@@ -930,7 +930,6 @@ def inspect_sogm_sessions(dataset_path, map_day, train_days, train_comments):
             for f_ind_save, s_ind_save in selected_saves:
                 print(f_ind_save, s_ind_save)
 
-
         # Save current as ptcloud video
         if event.key in ['h', 'H']:
 

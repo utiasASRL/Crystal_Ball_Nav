@@ -261,30 +261,20 @@ def Apple_sessions():
 
     dataset_path = '../Data/Apple1'
     sessions_and_comments = [['2022-12-05_15-06-25', ''],  # - Mapping1
-                             ['2022-12-05_16-23-54', ''],  # - Mapping1
-                             ['2022-12-05_16-47-02', ''],  # - Mapping2
-                             ['2022-12-05_17-02-23', '']]  # - Mapping3
-
-    sessions_and_comments += [['2022-12-05_15-06-25', ''],
-                              ['2022-12-05_16-23-54', ''],
-                              ['2022-12-05_16-47-02', ''],
-                              ['2022-12-05_17-02-23', ''],
-                              ['2022-12-05_17-39-46', ''],
-                              ['2022-12-07_15-24-56', ''],
-                              ['2022-12-07_15-28-04', ''],
-                              ['2022-12-07_15-36-58', ''],
-                              ['2022-12-07_15-40-41', ''],
-                              ['2022-12-07_15-43-46', ''],
-                              ['2022-12-07_15-49-48', '']]
-
+                             ['2022-12-05_16-23-54', ''],  # - Mapping Refine 1
+                             ['2022-12-05_16-47-02', ''],  # - Mapping Refine 2
+                             ['2022-12-05_17-02-23', '']]  # - Mapping Refine 3
     # Actual sessions for training
     # ****************************
 
     # The list contains tuple (name, comments), so that we do not reinspect things we already did
 
-    # Tuesday 4pm
-    sessions_and_comments += [['2022-03-08_21-02-28', 'ff1 train >    Good    (lots of people moving)'],
-                              ['2022-03-08_21-08-04', 'ff1 train >   Medium   (Some people just not moving)']]
+    sessions_and_comments += [['2022-12-07_15-24-56', 'A1 train > wei experimenting + 1'],
+                              ['2022-12-07_15-28-04', 'A2 train > wei experimenting'],
+                              ['2022-12-07_15-36-58', 'A1 train > wei experimenting'],
+                              ['2022-12-07_15-40-41', 'A1 train > Only me'],
+                              ['2022-12-07_15-49-48', 'A1 val > Only me']]
+
 
     # Procesing
     # *********
@@ -296,7 +286,7 @@ def Apple_sessions():
 
     map_i = 0
     refine_i = np.arange(len(sessions))[1:4]
-    train_i = np.arange(len(sessions))[1:]
+    train_i = np.arange(len(sessions))[4:]
 
     map_day = sessions[map_i]
     refine_sessions = np.array(sessions)[refine_i]

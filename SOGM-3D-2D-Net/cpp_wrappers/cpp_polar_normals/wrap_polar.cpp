@@ -173,18 +173,20 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 	char* fnames_str;
 	PyObject* map_p_obj = NULL;
 	PyObject* map_n_obj = NULL;
+	PyObject* map_s_obj = NULL;
 	PyObject* H_obj = NULL;
 
 	// Keywords containers
-	static char* kwlist[] = {(char *)"frame_names", (char *)"map_points", (char *)"map_normals", (char *)"H_frames",
-							 (char *)"map_dl", (char *)"theta_dl", (char *)"phi_dl",
+	static char *kwlist[] = {(char *)"frame_names", (char *)"map_points", (char *)"map_normals", (char *)"map_scores",
+							 (char *)"H_frames", (char *)"map_dl", (char *)"theta_dl", (char *)"phi_dl",
 							 (char *)"verbose_time", (char *)"n_slices", (char *)"lidar_n_lines", NULL};
 
 	// Parse the input
-	if (!PyArg_ParseTupleAndKeywords(args, keywds, "zOOO|$ffffll", kwlist,
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "zOOOO|$ffffll", kwlist,
 									 &fnames_str,
 									 &map_p_obj,
 									 &map_n_obj,
+									 &map_s_obj,
 									 &H_obj,
 									 &map_dl,
 									 &theta_dl,
@@ -200,6 +202,7 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 	// Interpret the input objects as numpy arrays.
 	PyObject* map_p_array = PyArray_FROM_OTF(map_p_obj, NPY_FLOAT, NPY_IN_ARRAY);
 	PyObject* map_n_array = PyArray_FROM_OTF(map_n_obj, NPY_FLOAT, NPY_IN_ARRAY);
+	PyObject* map_s_array = PyArray_FROM_OTF(map_s_obj, NPY_FLOAT, NPY_IN_ARRAY);
 	PyObject* H_array = PyArray_FROM_OTF(H_obj, NPY_DOUBLE, NPY_IN_ARRAY);
 
 	// Data verification
@@ -213,6 +216,8 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 	error_messages.push_back("Error converting map points to numpy arrays of type float32");
 	conditions.push_back(map_n_array == NULL);
 	error_messages.push_back("Error converting map normals to numpy arrays of type float32");
+	conditions.push_back(map_s_array == NULL);
+	error_messages.push_back("Error converting map scores to numpy arrays of type float32");
 	conditions.push_back(H_array == NULL);
 	error_messages.push_back("Error converting R to numpy arrays of type double");
 
@@ -223,6 +228,7 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 		{
 			Py_XDECREF(map_p_array);
 			Py_XDECREF(map_n_array);
+			Py_XDECREF(map_s_array);
 			Py_XDECREF(H_array);
 			PyErr_SetString(PyExc_RuntimeError, error_messages[i].c_str());
 			return NULL;
@@ -234,6 +240,8 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 	error_messages.push_back("Error, wrong dimensions : map_points.shape is not (N, 3)");
 	conditions.push_back((int)PyArray_NDIM(map_n_array) != 2 || (int)PyArray_DIM(map_n_array, 1) != 3);
 	error_messages.push_back("Error, wrong dimensions : map_normals.shape is not (N, 3)");
+	conditions.push_back((int)PyArray_NDIM(map_s_array) != 1 || (int)PyArray_DIM(map_n_array, 0) != (int)PyArray_DIM(map_p_array, 0));
+	error_messages.push_back("Error, wrong dimensions : map_scores.shape is not (N,)");
 	conditions.push_back((int)PyArray_NDIM(H_array) != 3 || (int)PyArray_DIM(H_array, 1) != 4 || (int)PyArray_DIM(H_array, 2) != 4);
 	error_messages.push_back("Error, wrong dimensions : R.shape is not (N, 4, 4)");
 
@@ -244,6 +252,7 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 		{
 			Py_XDECREF(map_p_array);
 			Py_XDECREF(map_n_array);
+			Py_XDECREF(map_s_array);
 			Py_XDECREF(H_array);
 			PyErr_SetString(PyExc_RuntimeError, error_messages[i].c_str());
 			return NULL;
@@ -263,8 +272,10 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 
 	// Convert PyArray to Cloud C++ class
 	vector<PointXYZ> map_points, map_normals;
+	vector<float> map_scores;
 	map_points = vector<PointXYZ>((PointXYZ*)PyArray_DATA(map_p_array), (PointXYZ*)PyArray_DATA(map_p_array) + Nm);
 	map_normals = vector<PointXYZ>((PointXYZ*)PyArray_DATA(map_n_array), (PointXYZ*)PyArray_DATA(map_n_array) + Nm);
+	map_scores = vector<float>((float*)PyArray_DATA(map_s_array), (float*)PyArray_DATA(map_s_array) + Nm);
 
 	// Convert H to Eigen matrices
 	vector<double> H_vec((double*)PyArray_DATA(H_array), (double*)PyArray_DATA(H_array) + N_frames * 4 * 4);
@@ -277,10 +288,10 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 
 	cout << "Creating point map" << endl;
 
-	vector<float> map_scores(map_points.size(), 1.0);
 	PointMap tmp_map(map_dl);
 	tmp_map.cloud.pts = map_points;
 	tmp_map.normals = map_normals;
+	tmp_map.scores = map_scores;
 	tmp_map.samples.reserve(map_points.size());
 	
 	// Create the pointmap voxels
@@ -313,6 +324,7 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 	{
 		Py_XDECREF(map_p_array);
 		Py_XDECREF(map_n_array);
+		Py_XDECREF(map_s_array);
 		Py_XDECREF(H_array);
 		cout << "ERROR: multiple points in a single map voxel" << endl;
 		return NULL;
@@ -476,6 +488,7 @@ static PyObject* map_frame_comp(PyObject* self, PyObject* args, PyObject* keywds
 
 	Py_XDECREF(map_p_array);
 	Py_XDECREF(map_n_array);
+	Py_XDECREF(map_s_array);
 	Py_XDECREF(H_array);
 
 	return ret;

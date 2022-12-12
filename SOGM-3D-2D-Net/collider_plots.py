@@ -2798,6 +2798,81 @@ def UTIn3D_A_example():
     return logs, logs_names, all_wanted_s, all_wanted_f
 
 
+def Apple1_example():
+    """
+    Logs from trainings using Apple1
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-12-09_18-13-49'
+    end = 'Log_2023-12-09_18-13-49'
+
+    # Path to the results logs
+    res_path = 'results'
+
+    # Gathering names
+    logs = np.sort([join(res_path, log) for log in listdir(res_path) if start <= log <= end])
+
+    # Optinally add some specific folder that is not between start and end
+    logs = logs.astype('<U50')
+
+    # Give names to the logs (for legends). These logs were all done with e500 and rot augment
+    logs_names = ['Apple1',
+                  'Apple1+A',
+                  'Apple1+A+H',
+                  'etc']
+
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # Copy here the indices you selected with gui
+    all_wanted_s = ['2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48',
+                    '2022-12-07_15-49-48']
+    all_wanted_f = [165,
+                    204,
+                    226,
+                    253,
+                    280,
+                    297,
+                    313,
+                    353,
+                    380,
+                    394,
+                    445,
+                    499,
+                    524,
+                    568,
+                    618,
+                    646,
+                    684,
+                    707,
+                    931,
+                    955,
+                    966]
+
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names, all_wanted_s, all_wanted_f
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 #
 #           Main call
@@ -2824,14 +2899,13 @@ if __name__ == '__main__':
         max_clean_date = 'Log_2022-05-31_08-09-47'
         cleanup(res_path, max_clean_date, remove_tmp_test=False)
     
-
     ######################################
     # Step 1: Choose what you want to plot
     ######################################
 
-    plotting = 'gifs'  # Comparison of last checkpoints of each logs as gif images
+    # plotting = 'gifs'  # Comparison of last checkpoints of each logs as gif images
 
-    # plotting = 'PR'  # Comparison of the performances with good metrics
+    plotting = 'PR'  # Comparison of the performances with good metrics
     # plotting = 'PR-100'  # Comparison of the performances with good metrics
 
     # plotting = 'conv'  # Convergence of the training sessions (plotting training loss and validation results)
@@ -2848,7 +2922,7 @@ if __name__ == '__main__':
     ##################################################
 
     # Function returning the names of the log folders that we want to plot
-    logs, logs_names, all_wanted_s, all_wanted_f = UTIn3D_A_lifelong()
+    logs, logs_names, all_wanted_s, all_wanted_f = Apple1_example()
 
     # Check that all logs are of the same dataset. Different object can be compared
     plot_dataset = None
@@ -2886,10 +2960,23 @@ if __name__ == '__main__':
 
     # Get dataset path
     if len(all_val_days) > 0:
-        dataset_candidates = [join('../Data', path) for path in listdir('../Data')
-                              if exists(join('../Data', path, 'runs', all_val_days[0]))]
+        dataset_candidates = [join('../Data', path) for path in listdir('../Data') for val_day in all_val_days
+                              if exists(join('../Data', path, 'runs', val_day))]
     else:
         dataset_candidates = []
+
+    #
+    #
+    #### TMP ####
+    print(all_val_days)
+    print(dataset_candidates)
+    all_val_days = [val_day for val_day, data_path in zip(all_val_days, dataset_candidates) if data_path in dataset_candidates[-1]]
+    dataset_candidates = dataset_candidates[-1:]
+    print(all_val_days)
+    print(dataset_candidates)
+    #### TMP ####
+    #
+    #
 
     if len(dataset_candidates) > 1:
         raise ValueError('Error: Run ' + all_val_days[0] + ' was found in multiple datasets')

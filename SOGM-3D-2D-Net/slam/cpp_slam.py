@@ -146,6 +146,7 @@ def polar_normals(points,
 def ray_casting_annot(frame_names,
                       map_points,
                       map_normals,
+                      map_scores,
                       H_frames,
                       theta_dl=0.5 * 1.29 * np.pi / 180,
                       phi_dl=0.2 * 1.29 * np.pi / 180,
@@ -171,6 +172,7 @@ def ray_casting_annot(frame_names,
     movable_prob, movable_count = cpp_polar_processing.map_frame_comp(frame_names=stacked_f_names,
                                                                       map_points=map_points,
                                                                       map_normals=map_normals,
+                                                                      map_scores=map_scores,
                                                                       H_frames=H_frames,
                                                                       map_dl=map_dl,
                                                                       theta_dl=theta_dl,
@@ -178,7 +180,7 @@ def ray_casting_annot(frame_names,
                                                                       verbose_time=verbose_time,
                                                                       n_slices=motion_distortion_slices,
                                                                       lidar_n_lines=lidar_n_lines)
-    #motion_distortion=motion_distortion)
+    # motion_distortion=motion_distortion)
 
     return movable_prob, movable_count
 

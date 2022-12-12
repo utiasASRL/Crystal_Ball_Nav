@@ -1994,6 +1994,7 @@ class MyhalCollisionSlam:
             data = read_ply(map_original_name)
             points = np.vstack((data['x'], data['y'], data['z'])).T
             normals = np.vstack((data['nx'], data['ny'], data['nz'])).T
+            scores = data['f1']
 
             print('\nStart ray casting')
 
@@ -2001,6 +2002,7 @@ class MyhalCollisionSlam:
             movable_prob, movable_count = ray_casting_annot(frame_names,
                                                             points,
                                                             normals,
+                                                            scores,
                                                             loop_H,
                                                             theta_dl=0.33 * np.pi / 180,
                                                             phi_dl=0.4 * np.pi / 180,
@@ -2102,6 +2104,7 @@ class MyhalCollisionSlam:
                 movable_prob, movable_count = ray_casting_annot(frame_names,
                                                                 points,
                                                                 normals,
+                                                                scores,
                                                                 correct_H,
                                                                 theta_dl=0.33 * np.pi / 180,
                                                                 phi_dl=0.4 * np.pi / 180,
@@ -2464,6 +2467,7 @@ class MyhalCollisionSlam:
                 movable_prob, movable_count = ray_casting_annot(frame_names,
                                                                 map_points,
                                                                 map_normals,
+                                                                map_scores,
                                                                 correct_H,
                                                                 theta_dl=0.33 * np.pi / 180,
                                                                 phi_dl=0.4 * np.pi / 180,
@@ -2481,7 +2485,6 @@ class MyhalCollisionSlam:
                           ['x', 'y', 'z', 'nx', 'ny', 'nz', 'movable', 'counts'])
 
             all_movables_probs.append(movable_prob)
-
 
         print([aaa.shape for aaa in all_movables_probs])
 

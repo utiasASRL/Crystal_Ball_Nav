@@ -311,9 +311,11 @@ void PointMap::update_movable_pts(vector<PointXYZ> &frame_points,
 	float inv_theta_dl = 1.0 / theta_dl;
 	float inv_phi_dl = 1.0 / phi_dl;
 	inv_dl = 1.0 / dl;
-	float min_cos_angle = cos(5 * M_PI / 12);
-	float min_vert_cos = cos(5 * M_PI / 12);
+	float min_cos_angle = cos(11 * M_PI / 24);
+	float min_vert_cos = cos(11 * M_PI / 24);
 	bool motion_distortion = n_slices > 1;
+
+	float min_wall_score = 0.6;
 
 	// Convert alignment matrices to float
 	Eigen::Matrix3f R = (H1.block(0, 0, 3, 3)).cast<float>();
@@ -855,6 +857,7 @@ void PointMap::update_movable_pts(vector<PointXYZ> &frame_points,
 		PointXYZ best_xyz;
 		PointXYZ best_nxyz;
 		PointXYZ best_rtp;
+		float best_score;
 		for (int s = 0; s < n_slices; s++)
 		{
 			if (tile_data[tile_ind + s] > 0)
@@ -862,6 +865,7 @@ void PointMap::update_movable_pts(vector<PointXYZ> &frame_points,
 				// Align point in frame coordinates (and normal)
 				PointXYZ xyz(cloud.pts[p_i]);
 				PointXYZ nxyz(normals[p_i]);
+				float score = scores[p_i];
 				Eigen::Map<Eigen::Vector3f> p_mat((float *)&xyz, 3, 1);
 				Eigen::Map<Eigen::Vector3f> n_mat((float *)&nxyz, 3, 1);
 				p_mat = R_t_slices[s] * (p_mat - T_slices[s]);
@@ -889,6 +893,7 @@ void PointMap::update_movable_pts(vector<PointXYZ> &frame_points,
 						best_xyz = xyz;
 						best_nxyz = nxyz;
 						best_rtp = rtp;
+						best_score = score;
 					}
 				}
 			}
@@ -915,6 +920,9 @@ void PointMap::update_movable_pts(vector<PointXYZ> &frame_points,
 				//	> Angle between normal and ray is nearly pi/2
 				float cos_angle = abs(best_xyz.dot(best_nxyz) / best_rtp.x);
 				condition = condition && (cos_angle < min_cos_angle);
+
+				//  > Score should be high enough
+				condition = condition && (best_score > min_wall_score);
 
 				// //  > point is located in further than XX% of the ray.
 				// float min_ray_dist = 0.5;

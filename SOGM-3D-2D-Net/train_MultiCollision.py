@@ -45,7 +45,7 @@ from models.architectures import KPCollider
 from os.path import exists, join
 from os import makedirs
 
-from MyhalCollision_sessions import UTIn3D_H_sessions, UTIn3D_A_sessions
+from MyhalCollision_sessions import UTIn3D_H_sessions, UTIn3D_A_sessions, Apple_sessions
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -224,7 +224,7 @@ class MultiCollisionConfig(Config):
     grad_clip_norm = 100.0
 
     # Number of steps per epochs
-    epoch_steps = 500
+    epoch_steps = 400
 
     # Number of validation examples per epoch
     validation_size = 15
@@ -375,10 +375,12 @@ if __name__ == '__main__':
     # Get sessions from the annotation script
     dataset_path, map_day, refine_sessions, train_days, train_comments = UTIn3D_A_sessions()
     dataset_path2, map_day2, refine_sessions2, train_days2, train_comments2 = UTIn3D_H_sessions()
+    dataset_path3, map_day3, refine_sessions3, train_days3, train_comments3 = Apple_sessions()
 
     # Get training and validation sets
     val_inds = np.array([i for i, c in enumerate(train_comments) if 'val' in c.split('>')[0]])
     val_inds2 = np.array([i for i, c in enumerate(train_comments2) if 'val' in c.split('>')[0]])
+    val_inds3 = np.array([i for i, c in enumerate(train_comments3) if 'val' in c.split('>')[0]])
 
     ######################
     # Automatic Annotation
@@ -428,6 +430,7 @@ if __name__ == '__main__':
     # Validation sessions
     train_inds = [i for i in range(len(train_days)) if i not in val_inds]
     train_inds2 = [i for i in range(len(train_days2)) if i not in val_inds2]
+    train_inds3 = [i for i in range(len(train_days3)) if i not in val_inds3]
     
 
     # TMP, lifelong learning exp. Use trains inds up to :7, :17, :25, :all
@@ -516,27 +519,65 @@ if __name__ == '__main__':
     # Init input pipeline
     #####################
 
+    print('okok')
 
-    train_days_lists = [train_days[train_inds],
-                        train_days2[train_inds2],
-                        sim_train_days[sim_train_inds]]
+    # TMP
+    tmp_iii = len([f for f in os.listdir('results') if f.startswith('Log_')])
+    print()
+
+    if tmp_iii == 1:  # Only Apple1
+        train_days_lists = [train_days3[train_inds3]]
+        dataset_paths_list = [dataset_path3]
+        simulated_list = [False]
+        val_days_lists = [train_days3[val_inds3]]
+        config.balance_proportions = [0, 0, 1, 1, 20]
+
+    elif tmp_iii == 2:  # Apple1 + UTIn3D_A
+        train_days_lists = [train_days[train_inds],
+                            train_days3[train_inds3]]
+        dataset_paths_list = [dataset_path, dataset_path3]
+        simulated_list = [False, False]
+        val_days_lists = [train_days[val_inds],
+                          train_days3[val_inds3]]
+        config.balance_proportions = [0, 0, 1, 1, 20]
+
+    elif tmp_iii == 3:  # Apple1 + UTIn3D_A + UTIn3D_H
+        train_days_lists = [train_days[train_inds],
+                            train_days2[train_inds2],
+                            train_days3[train_inds3]]
+        dataset_paths_list = [dataset_path, dataset_path2, dataset_path3]
+        simulated_list = [False, False, False]
+        val_days_lists = [train_days[val_inds],
+                          train_days2[val_inds2],
+                          train_days3[val_inds3]]
+        config.balance_proportions = [0, 0, 1, 1, 20]
+
+    elif tmp_iii == 4:  # Apple1 + UTIn3D_A + UTIn3D_H + Simu
+        train_days_lists = [train_days[train_inds],
+                            train_days2[train_inds2],
+                            train_days3[train_inds3],
+                            sim_train_days[sim_train_inds]]
+        dataset_paths_list = [dataset_path, dataset_path2, dataset_path3, sim_path]
+        simulated_list = [False, False, False, True]
+        val_days_lists = [train_days[val_inds],
+                          train_days2[val_inds2],
+                          train_days3[val_inds3],
+                          sim_train_days[sim_val_inds]]
+
     training_dataset = MultiCollisionDataset(config,
                                              train_days_lists,
                                              chosen_set='training',
-                                             dataset_paths=[dataset_path, dataset_path2, sim_path],
-                                             simulated=[False, False, True],
+                                             dataset_paths=dataset_paths_list,
+                                             simulated=simulated_list,
                                              balance_classes=True)
 
-    val_days_lists = [train_days[val_inds],
-                      train_days2[val_inds2],
-                      sim_train_days[sim_val_inds]]
     test_dataset = MultiCollisionDataset(config,
                                          val_days_lists,
                                          chosen_set='validation',
-                                         dataset_paths=[dataset_path, dataset_path2, sim_path],
-                                         simulated=[False, False, True],
+                                         dataset_paths=dataset_paths_list,
+                                         simulated=simulated_list,
                                          balance_classes=False,)
-
+        
     # Initialize samplers
     training_sampler = MultiCollisionSampler(training_dataset, manual_training_frames=True)
     test_sampler = MultiCollisionSampler(test_dataset)
@@ -564,7 +605,6 @@ if __name__ == '__main__':
         config.max_val_points = 1e9
         test_loader.dataset.max_in_p = 1e9
         test_sampler.calib_max_in(config, test_loader, untouched_ratio=0.95, verbose=True, force_redo=False)
-
 
     # Calibrate samplers
     training_sampler.calibration(training_loader, verbose=True)

@@ -1895,6 +1895,8 @@ def annotation_process(dataset,
                        still_threshold=0.5,
                        short_threshold=0.7,
                        long_threshold=0.6,
+                       still_close_d=0.6,  # previously 0.9
+                       movable_close_d=[0.6, 0.4, 0.2],  # previously [0.9, 0.4, 0.2]
                        min_rays=10,
                        on_gt=False):
 
@@ -1992,8 +1994,6 @@ def annotation_process(dataset,
                                [0.0, 1.0, 0.0, 0.0],
                                [0.0, 0.0, 1.0, 0.7],
                                [0.0, 0.0, 0.0, 1.0]], dtype=np.float64)
-
-
 
             if (day >= '2022-05-31_14-45-53'):
 
@@ -2098,15 +2098,15 @@ def annotation_process(dataset,
             closed_still_mask = sparse_point_closing(buffer_pts,
                                                      positive_mask=still_mask,
                                                      negative_mask=new_mask,
-                                                     dilate_d=0.95,
-                                                     erode_d=0.9)
+                                                     dilate_d=still_close_d,
+                                                     erode_d=still_close_d * 0.95)
 
             buffer_classif[closed_still_mask] = 2
 
             # Use plane for ground
             large_ground_mask = extract_flat_ground(buffer_pts,
                                                     dist_thresh=0.3,
-                                                    remove_dist=0.1)
+                                                    remove_dist=0.15)
             fine_ground_mask = extract_flat_ground(buffer_pts,
                                                    dist_thresh=0.2,
                                                    remove_dist=0.15)
@@ -2134,6 +2134,7 @@ def annotation_process(dataset,
 
         ray_pts = buffer_pts[buffer_classif == -1]
         ray_normals = buffer_normals[buffer_classif == -1]
+        ray_scores = np.ones_like(ray_pts[:, 0])
 
         old_movable_name = join(out_folder, 'debug_movable.ply')
         movable_name = join(out_folder, 'movables_{:s}.ply'.format(day))
@@ -2148,6 +2149,7 @@ def annotation_process(dataset,
             movable_prob, movable_count = ray_casting_annot(frame_names,
                                                             ray_pts,
                                                             ray_normals,
+                                                            ray_scores,
                                                             correct_H,
                                                             theta_dl=0.33 * np.pi / 180,
                                                             phi_dl=0.5 * np.pi / 180,
@@ -2203,7 +2205,7 @@ def annotation_process(dataset,
                                                        erode_d=0.1)
             categories[closed_dynamic_mask] = 4
 
-            for refine_d in [0.9, 0.4, 0.2]:
+            for refine_d in movable_close_d:
                 dynamic_mask = categories == 4
                 movable_mask = categories == 3
                 closed_movable_mask = sparse_point_closing(ray_pts,
@@ -2460,7 +2462,7 @@ def detect_short_term_movables(dataset, pointmap, frame_names, transform_list, f
 
     else:
 
-        pointmap = ray_casting_annot(dataset, pointmap, frame_names, transform_list, frame_stride, out_folder)
+        pointmap = ray_casting_annot_old(dataset, pointmap, frame_names, transform_list, frame_stride, out_folder)
 
         # Save last map
         movable_prob = pointmap.movable_prob / (pointmap.movable_count + 1e-6)
@@ -2498,7 +2500,7 @@ def detect_long_term_movables(dataset, pointmap, all_frame_names, all_transform_
             pointmap.movable_count *= 0
 
             # Do ray casting
-            pointmap = ray_casting_annot(dataset, pointmap, frame_names, transform_list, frame_stride, out_folder)
+            pointmap = ray_casting_annot_old(dataset, pointmap, frame_names, transform_list, frame_stride, out_folder)
 
             # Get probabilities
             longterm_prob = pointmap.movable_prob / (pointmap.movable_count + 1e-6)
@@ -2529,7 +2531,7 @@ def detect_still_objects(dataset, pointmap, frame_names, transform_list, frame_s
 
     else:
 
-        pointmap = ray_casting_annot(dataset, pointmap, frame_names, transform_list, frame_stride, out_folder)
+        pointmap = ray_casting_annot_old(dataset, pointmap, frame_names, transform_list, frame_stride, out_folder)
 
         # Save map
         still_prob = pointmap.still_prob / (pointmap.movable_count + 1e-6)
